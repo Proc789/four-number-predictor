@@ -98,8 +98,8 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            # 命中統計僅在統計模式啟用且已有預測時執行
-            if training_mode and len(predictions) >= 1:
+            # 關卡與命中統計（統一判定邏輯）
+            if training_mode and last_prediction:
                 champion = current[0]
                 total_tests += 1
                 if champion in last_prediction:
