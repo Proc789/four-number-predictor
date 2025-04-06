@@ -5,9 +5,11 @@ from collections import Counter
 app = Flask(__name__)
 history = []
 predictions = []
-hit_stats = {"hot": 0, "dynamic": 0, "extra": 0, "total": 0, "all": 0}
-current_stage = 1
-training_mode = False
+hits = 0
+total = 0
+stage = 1
+training = False
+last_result = None
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -16,9 +18,10 @@ TEMPLATE = """
   <title>4碼預測器</title>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
 </head>
-<body style='max-width: 400px; margin: auto; padding-top: 30px; font-family: sans-serif; text-align: center;'>
+<body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>4碼預測器</h2>
-  <div>版本：熱號2＋動熱1＋補碼1（公版UI）</div>
+  <div style='font-size: 14px;'>版本：熱號2 + 動熱1 + 補碼1（公版UI）</div><br>
+
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -27,39 +30,39 @@ TEMPLATE = """
   </form>
   <br>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
-  <a href='/reset'><button>清除資料</button></a>
+  <a href='/reset'><button style='margin-left: 10px;'>清除資料</button></a>
 
   {% if prediction %}
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
+  {% elif stage and history|length >= 5 and predictions %}
+    <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
-  {% if last_prediction %}
+
+  {% if last_result %}
     <div style='margin-top: 10px;'>
-      <strong>上期預測號碼：</strong> {{ last_prediction }}
+      <strong>上期預測號碼：</strong> {{ last_prediction }}<br>
+      <strong>上期冠軍號碼：</strong> {{ last_result[0] }}<br>
+      <strong>是否命中：</strong> {{ last_result[1] }}
     </div>
   {% endif %}
 
   {% if training %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
-      冠軍命中次數（任一區）：{{ hit_stats.all }} / {{ hit_stats.total }}<br>
-      熱號命中次數：{{ hit_stats.hot }}<br>
-      動熱命中次數：{{ hit_stats.dynamic }}<br>
-      補碼命中次數：{{ hit_stats.extra }}<br>
+      冠軍命中次數（任一區）：{{ hits }} / {{ total }}<br>
     </div>
   {% endif %}
 
-  {% if history_data %}
-    <div style='margin-top: 20px; text-align: left;'>
-      <strong>最近輸入紀錄：</strong>
-      <ul>
-        {% for row in history_data %}
-          <li>第 {{ loop.index }} 期：{{ row }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
+  <div style='margin-top: 20px; text-align: left;'>
+    <strong>最近輸入紀錄：</strong>
+    <ul>
+      {% for row in history_data %}
+        <li>第 {{ loop.index }} 期：{{ row }}</li>
+      {% endfor %}
+    </ul>
+  </div>
 
   <script>
     function moveToNext(current, nextId) {
@@ -78,7 +81,7 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global current_stage
+    global hits, total, stage, training, last_result
     prediction = None
     last_prediction = predictions[-1] if predictions else None
 
@@ -90,61 +93,70 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(history) >= 5:
+            if len(predictions) >= 2:
+                champion = current[0]
+                last = predictions[-2]
+                hit = '命中' if champion in last else '未命中'
+                last_result = (champion, hit)
+
+                if training:
+                    total += 1
+                    if hit == '命中':
+                        hits += 1
+                        stage = 1
+                    else:
+                        stage += 1
+            else:
+                last_result = (current[0], '未比對')
+
+            if training or len(history) >= 5:
                 prediction = generate_prediction()
                 predictions.append(prediction)
 
-                if training_mode and len(predictions) >= 2:
-                    champion = current[0]
-                    hit_stats['total'] += 1
-                    if champion in predictions[-2]:
-                        hit_stats['all'] += 1
-                        current_stage = 1
-                    else:
-                        current_stage += 1
-                    if champion in prediction[:2]:
-                        hit_stats['hot'] += 1
-                    elif champion in prediction[2:3]:
-                        hit_stats['dynamic'] += 1
-                    elif champion in prediction[3:]:
-                        hit_stats['extra'] += 1
         except:
             prediction = ['格式錯誤']
 
     return render_template_string(TEMPLATE,
         prediction=prediction,
         last_prediction=last_prediction,
-        stage=current_stage,
+        last_result=last_result,
+        stage=stage,
         history_data=history[-10:],
-        hit_stats=hit_stats,
-        training=training_mode)
+        training=training,
+        hits=hits,
+        total=total)
 
 @app.route('/toggle')
 def toggle():
-    global training_mode, hit_stats, current_stage
-    training_mode = not training_mode
-    hit_stats = {"hot": 0, "dynamic": 0, "extra": 0, "total": 0, "all": 0}
-    current_stage = 1
+    global training, hits, total, stage
+    training = not training
+    if training:
+        hits = 0
+        total = 0
+        stage = 1
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hit_stats, current_stage
+    global history, predictions, hits, total, stage, training, last_result
     history = []
     predictions = []
-    hit_stats = {"hot": 0, "dynamic": 0, "extra": 0, "total": 0, "all": 0}
-    current_stage = 1
+    hits = 0
+    total = 0
+    stage = 1
+    last_result = None
     return redirect('/')
 
 def generate_prediction():
     recent = history[-3:]
-    flat = [n for g in recent for n in g]
+    flat = [n for group in recent for n in group]
     freq = Counter(flat)
-    hot = [n for n, _ in freq.most_common(2)]
+    top_hot = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))
+    hot = [n for n, _ in top_hot[:2]]
 
-    flat_dyn = [n for n in flat if n not in hot]
-    freq_dyn = Counter(flat_dyn)
-    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dyn[::-1].index(x[0])))
+    flat_dynamic = [n for n in flat if n not in hot]
+    freq_dyn = Counter(flat_dynamic)
+    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:1]]
 
     used = set(hot + dynamic)
