@@ -36,7 +36,7 @@ TEMPLATE = """
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
-  {% elif stage and history|length >= 5 %}
+  {% elif stage and history|length >= 5 and predictions %}
     <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
@@ -93,11 +93,12 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(predictions) >= 1 and len(history) > 1:
+            if len(predictions) >= 1:
                 champion = current[0]
                 last = predictions[-1]
                 hit = '命中' if champion in last else '未命中'
                 last_result = (champion, hit)
+
                 if training:
                     total += 1
                     if hit == '命中':
@@ -105,15 +106,12 @@ def index():
                         stage = 1
                     else:
                         stage += 1
-            elif len(history) > 1:
+            else:
                 last_result = (current[0], '未比對')
 
             if training or len(history) >= 5:
-                try:
-                    prediction = generate_prediction()
-                    predictions.append(prediction)
-                except:
-                    prediction = ['格式錯誤']
+                prediction = generate_prediction()
+                predictions.append(prediction)
 
         except:
             prediction = ['格式錯誤']
@@ -155,7 +153,7 @@ def generate_prediction():
     freq = Counter(flat)
     top_hot = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))
     hot = [n for n, _ in top_hot[:2]]
-    
+
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = {n: flat_dynamic.count(n) for n in set(flat_dynamic)}
     dynamic_pool = sorted(freq_dyn, key=lambda x: (-freq_dyn[x], -flat_dynamic[::-1].index(x)))
