@@ -38,14 +38,14 @@ TEMPLATE = """
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
-  {% elif stage and history|length >= 5 and predictions %}
-    <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
-
   {% if last_prediction %}
     <div style='margin-top: 10px;'>
       <strong>上期預測號碼：</strong> {{ last_prediction }}
     </div>
+  {% endif %}
+  {% if stage and (training or history|length >= 5) %}
+    <div style='margin-top: 10px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
   {% if training %}
