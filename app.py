@@ -5,14 +5,13 @@ from collections import Counter
 app = Flask(__name__)
 history = []
 predictions = []
-hits = 0
 hot_hits = 0
 dynamic_hits = 0
 extra_hits = 0
-total = 0
-stage = 1
-training = False
-sources = []
+all_hits = 0
+total_tests = 0
+current_stage = 1
+training_mode = False
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -24,6 +23,7 @@ TEMPLATE = """
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>4碼預測器</h2>
   <div>版本：熱號2 + 動熱1 + 補碼1（公版UI）</div>
+
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -51,7 +51,7 @@ TEMPLATE = """
   {% if training %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
-      冠軍命中次數（任一區）：{{ hits }} / {{ total }}<br>
+      冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
       熱號命中次數：{{ hot_hits }}<br>
       動熱命中次數：{{ dynamic_hits }}<br>
       補碼命中次數：{{ extra_hits }}<br>
@@ -86,7 +86,7 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global hits, hot_hits, dynamic_hits, extra_hits, total, stage, training
+    global hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, training_mode
     prediction = None
     last_prediction = predictions[-1] if predictions else None
 
@@ -98,25 +98,24 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(predictions) >= 1:
+            # 命中統計僅在統計模式啟用且已有預測時執行
+            if training_mode and len(predictions) >= 1:
                 champion = current[0]
-                prev = predictions[-1]
-                if training:
-                    total += 1
-                    if champion in prev:
-                        hits += 1
-                        stage = 1
-                    else:
-                        stage += 1
-                    src = sources[-1]
-                    if champion in src['hot']:
-                        hot_hits += 1
-                    elif champion in src['dynamic']:
-                        dynamic_hits += 1
-                    elif champion in src['extra']:
-                        extra_hits += 1
+                total_tests += 1
+                if champion in last_prediction:
+                    all_hits += 1
+                    current_stage = 1
+                else:
+                    current_stage += 1
+                if champion in last_prediction[:2]:
+                    hot_hits += 1
+                elif champion == last_prediction[2]:
+                    dynamic_hits += 1
+                elif champion == last_prediction[3]:
+                    extra_hits += 1
 
-            if training or len(history) >= 5:
+            # 預測條件：統計模式啟用或輸入滿5筆
+            if training_mode or len(history) >= 5:
                 prediction = generate_prediction()
                 predictions.append(prediction)
 
@@ -126,57 +125,50 @@ def index():
     return render_template_string(TEMPLATE,
         prediction=prediction,
         last_prediction=last_prediction,
-        stage=stage,
+        stage=current_stage,
+        training=training_mode,
         history=history,
-        training=training,
-        hits=hits,
-        total=total,
         hot_hits=hot_hits,
         dynamic_hits=dynamic_hits,
-        extra_hits=extra_hits)
+        extra_hits=extra_hits,
+        all_hits=all_hits,
+        total_tests=total_tests)
 
 @app.route('/toggle')
 def toggle():
-    global training, hits, total, stage, predictions, sources
-    training = not training
-    hits = total = stage = 1
+    global training_mode, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
+    training_mode = not training_mode
+    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
+    current_stage = 1
     predictions = []
-    sources = []
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hits, total, stage, training, sources, hot_hits, dynamic_hits, extra_hits
+    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
     history.clear()
     predictions.clear()
-    sources = []
-    hits = total = stage = 1
-    hot_hits = dynamic_hits = extra_hits = 0
-    training = False
+    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
+    current_stage = 1
     return redirect('/')
 
 def generate_prediction():
     recent = history[-3:]
-    flat = [n for g in recent for n in g]
+    flat = [n for group in recent for n in group]
     freq = Counter(flat)
+    hot = [n for n, _ in freq.most_common(3)][:2]
 
-    hot = [n for n, _ in sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))][:2]
-    flat_dyn = [n for n in flat if n not in hot]
-    freq_dyn = Counter(flat_dyn)
-    dynamic = [n for n, _ in sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dyn[::-1].index(x[0])))][:1]
+    flat_dynamic = [n for n in flat if n not in hot]
+    freq_dyn = Counter(flat_dynamic)
+    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
+    dynamic = [n for n, _ in dynamic_pool[:1]]
 
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
     extra = pool[:1]
 
-    result = hot + dynamic + extra
-    filler_pool = [n for n in range(1, 11) if n not in result]
-    random.shuffle(filler_pool)
-    result += filler_pool[:(4 - len(result))]
-
-    sources.append({"hot": hot, "dynamic": dynamic, "extra": extra})
-    return sorted(result)
+    return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
     app.run(debug=True)
