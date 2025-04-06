@@ -15,12 +15,12 @@ TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <title>5碼預測器</title>
+  <title>4碼預測器</title>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
-  <h2>5碼預測器</h2>
-  <div style='font-size: 14px;'>版本：熱號2 + 動熱2 + 補碼1（公版UI）</div><br>
+  <h2>4碼預測器</h2>
+  <div style='font-size: 14px;'>版本：熱號2 + 動熱1 + 補碼1（公版UI）</div><br>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -36,22 +36,22 @@ TEMPLATE = """
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
-  {% elif stage and len(history) >= 5 %}
+  {% elif stage and history|length >= 5 %}
     <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
-  {% if last_prediction %}
+  {% if last_result %}
     <div style='margin-top: 10px;'>
-      <strong>上期預測號碼：</strong> {{ last_prediction }}
+      <strong>上期預測號碼：</strong> {{ last_prediction }}<br>
+      <strong>上期冠軍號碼：</strong> {{ last_result[0] }}<br>
+      <strong>是否命中：</strong> {{ last_result[1] }}
     </div>
-    <div><strong>上期冠軍號碼：</strong> {{ last_result[0] }}</div>
-    <div><strong>是否命中：</strong> {{ last_result[1] }}</div>
   {% endif %}
 
   {% if training %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
-      總命中次數（冠軍號碼）：{{ hits }} / {{ total }}<br>
+      冠軍命中次數（任一區）：{{ hits }} / {{ total }}<br>
     </div>
   {% endif %}
 
@@ -87,9 +87,9 @@ def index():
 
     if request.method == 'POST':
         try:
-            first = int(request.form.get('first') or 10)
-            second = int(request.form.get('second') or 10)
-            third = int(request.form.get('third') or 10)
+            first = int(request.form['first']) or 10
+            second = int(request.form['second']) or 10
+            third = int(request.form['third']) or 10
             current = [first, second, third]
             history.append(current)
 
@@ -109,8 +109,11 @@ def index():
                 last_result = (current[0], '未比對')
 
             if training or len(history) >= 5:
-                prediction = generate_prediction()
-                predictions.append(prediction)
+                try:
+                    prediction = generate_prediction()
+                    predictions.append(prediction)
+                except:
+                    prediction = ['格式錯誤']
 
         except:
             prediction = ['格式錯誤']
@@ -150,14 +153,19 @@ def generate_prediction():
     recent = history[-3:]
     flat = [n for group in recent for n in group]
     freq = Counter(flat)
-    hot = [n for n, _ in freq.most_common(3)][:2]
-    dynamic_pool = [n for n in freq if n not in hot]
-    dynamic_sorted = sorted(dynamic_pool, key=lambda x: (-freq[x], -flat[::-1].index(x)))
-    dynamic = dynamic_sorted[:2]
+    top_hot = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))
+    hot = [n for n, _ in top_hot[:2]]
+    
+    flat_dynamic = [n for n in flat if n not in hot]
+    freq_dyn = {n: flat_dynamic.count(n) for n in set(flat_dynamic)}
+    dynamic_pool = sorted(freq_dyn, key=lambda x: (-freq_dyn[x], -flat_dynamic[::-1].index(x)))
+    dynamic = dynamic_pool[:1] if dynamic_pool else []
+
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
     extra = pool[:1]
+
     return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
