@@ -44,7 +44,7 @@ TEMPLATE = """
       <strong>上期預測號碼：</strong> {{ last_prediction }}
     </div>
   {% endif %}
-  {% if stage and (training or history|length >= 5) %}
+  {% if predictions|length >= 1 %}
     <div style='margin-top: 10px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
@@ -98,21 +98,22 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            # 關卡與命中統計（統一判定邏輯）
-            if training_mode and last_prediction:
+            # 判定邏輯：只要預測存在就判定，不論訓練模式與否
+            if len(predictions) >= 1:
                 champion = current[0]
-                total_tests += 1
-                if champion in last_prediction:
-                    all_hits += 1
+                if champion in predictions[-1]:
+                    all_hits += 1 if training_mode else 0
                     current_stage = 1
                 else:
                     current_stage += 1
-                if champion in last_prediction[:2]:
-                    hot_hits += 1
-                elif champion == last_prediction[2]:
-                    dynamic_hits += 1
-                elif champion == last_prediction[3]:
-                    extra_hits += 1
+                if training_mode:
+                    total_tests += 1
+                    if champion in predictions[-1][:2]:
+                        hot_hits += 1
+                    elif champion == predictions[-1][2]:
+                        dynamic_hits += 1
+                    elif champion == predictions[-1][3]:
+                        extra_hits += 1
 
             # 預測條件：統計模式啟用或輸入滿5筆
             if training_mode or len(history) >= 5:
