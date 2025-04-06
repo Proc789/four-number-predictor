@@ -87,9 +87,9 @@ def index():
 
     if request.method == 'POST':
         try:
-            first = int(request.form['first']) or 10
-            second = int(request.form['second']) or 10
-            third = int(request.form['third']) or 10
+            first = int(request.form.get('first') or 10)
+            second = int(request.form.get('second') or 10)
+            third = int(request.form.get('third') or 10)
             current = [first, second, third]
             history.append(current)
 
@@ -109,11 +109,8 @@ def index():
                 last_result = (current[0], '未比對')
 
             if training or len(history) >= 5:
-                try:
-                    prediction = generate_prediction()
-                    predictions.append(prediction)
-                except:
-                    prediction = ['格式錯誤']
+                prediction = generate_prediction()
+                predictions.append(prediction)
 
         except:
             prediction = ['格式錯誤']
