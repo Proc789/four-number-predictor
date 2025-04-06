@@ -155,9 +155,9 @@ def generate_prediction():
     hot = [n for n, _ in top_hot[:2]]
 
     flat_dynamic = [n for n in flat if n not in hot]
-    freq_dyn = {n: flat_dynamic.count(n) for n in set(flat_dynamic)}
-    dynamic_pool = sorted(freq_dyn, key=lambda x: (-freq_dyn[x], -flat_dynamic[::-1].index(x)))
-    dynamic = dynamic_pool[:1] if dynamic_pool else []
+    freq_dyn = Counter(flat_dynamic)
+    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
+    dynamic = [n for n, _ in dynamic_pool[:1]]
 
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
