@@ -6,10 +6,13 @@ app = Flask(__name__)
 history = []
 predictions = []
 hits = 0
+hot_hits = 0
+dynamic_hits = 0
+extra_hits = 0
 total = 0
 stage = 1
 training = False
-last_result = None
+sources = []
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -20,8 +23,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>4碼預測器</h2>
-  <div style='font-size: 14px;'>版本：熱號2 + 動熱1 + 補碼1（公版UI）</div><br>
-
+  <div>版本：熱號2 + 動熱1 + 補碼1（公版UI）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -30,7 +32,7 @@ TEMPLATE = """
   </form>
   <br>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
-  <a href='/reset'><button style='margin-left: 10px;'>清除資料</button></a>
+  <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
 
   {% if prediction %}
     <div style='margin-top: 20px;'>
@@ -40,11 +42,9 @@ TEMPLATE = """
     <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
-  {% if last_result %}
+  {% if last_prediction %}
     <div style='margin-top: 10px;'>
-      <strong>上期預測號碼：</strong> {{ last_prediction }}<br>
-      <strong>上期冠軍號碼：</strong> {{ last_result[0] }}<br>
-      <strong>是否命中：</strong> {{ last_result[1] }}
+      <strong>上期預測號碼：</strong> {{ last_prediction }}
     </div>
   {% endif %}
 
@@ -52,17 +52,22 @@ TEMPLATE = """
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ hits }} / {{ total }}<br>
+      熱號命中次數：{{ hot_hits }}<br>
+      動熱命中次數：{{ dynamic_hits }}<br>
+      補碼命中次數：{{ extra_hits }}<br>
     </div>
   {% endif %}
 
-  <div style='margin-top: 20px; text-align: left;'>
-    <strong>最近輸入紀錄：</strong>
-    <ul>
-      {% for row in history_data %}
-        <li>第 {{ loop.index }} 期：{{ row }}</li>
-      {% endfor %}
-    </ul>
-  </div>
+  {% if history %}
+    <div style='margin-top: 20px; text-align: left;'>
+      <strong>最近輸入紀錄：</strong>
+      <ul>
+        {% for row in history[-10:] %}
+          <li>第 {{ loop.index }} 期：{{ row }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
 
   <script>
     function moveToNext(current, nextId) {
@@ -81,7 +86,7 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global hits, total, stage, training, last_result
+    global hits, hot_hits, dynamic_hits, extra_hits, total, stage, training
     prediction = None
     last_prediction = predictions[-1] if predictions else None
 
@@ -93,21 +98,23 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(predictions) >= 2:
+            if len(predictions) >= 1:
                 champion = current[0]
-                last = predictions[-2]
-                hit = '命中' if champion in last else '未命中'
-                last_result = (champion, hit)
-
+                prev = predictions[-1]
                 if training:
                     total += 1
-                    if hit == '命中':
+                    if champion in prev:
                         hits += 1
                         stage = 1
                     else:
                         stage += 1
-            else:
-                last_result = (current[0], '未比對')
+                    src = sources[-1]
+                    if champion in src['hot']:
+                        hot_hits += 1
+                    elif champion in src['dynamic']:
+                        dynamic_hits += 1
+                    elif champion in src['extra']:
+                        extra_hits += 1
 
             if training or len(history) >= 5:
                 prediction = generate_prediction()
@@ -119,52 +126,57 @@ def index():
     return render_template_string(TEMPLATE,
         prediction=prediction,
         last_prediction=last_prediction,
-        last_result=last_result,
         stage=stage,
-        history_data=history[-10:],
+        history=history,
         training=training,
         hits=hits,
-        total=total)
+        total=total,
+        hot_hits=hot_hits,
+        dynamic_hits=dynamic_hits,
+        extra_hits=extra_hits)
 
 @app.route('/toggle')
 def toggle():
-    global training, hits, total, stage
+    global training, hits, total, stage, predictions, sources
     training = not training
-    if training:
-        hits = 0
-        total = 0
-        stage = 1
+    hits = total = stage = 1
+    predictions = []
+    sources = []
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hits, total, stage, training, last_result
-    history = []
-    predictions = []
-    hits = 0
-    total = 0
-    stage = 1
-    last_result = None
+    global history, predictions, hits, total, stage, training, sources, hot_hits, dynamic_hits, extra_hits
+    history.clear()
+    predictions.clear()
+    sources = []
+    hits = total = stage = 1
+    hot_hits = dynamic_hits = extra_hits = 0
+    training = False
     return redirect('/')
 
 def generate_prediction():
     recent = history[-3:]
-    flat = [n for group in recent for n in group]
+    flat = [n for g in recent for n in g]
     freq = Counter(flat)
-    top_hot = sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))
-    hot = [n for n, _ in top_hot[:2]]
 
-    flat_dynamic = [n for n in flat if n not in hot]
-    freq_dyn = Counter(flat_dynamic)
-    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
-    dynamic = [n for n, _ in dynamic_pool[:1]]
+    hot = [n for n, _ in sorted(freq.items(), key=lambda x: (-x[1], -flat[::-1].index(x[0])))][:2]
+    flat_dyn = [n for n in flat if n not in hot]
+    freq_dyn = Counter(flat_dyn)
+    dynamic = [n for n, _ in sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dyn[::-1].index(x[0])))][:1]
 
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
     extra = pool[:1]
 
-    return sorted(hot + dynamic + extra)
+    result = hot + dynamic + extra
+    filler_pool = [n for n in range(1, 11) if n not in result]
+    random.shuffle(filler_pool)
+    result += filler_pool[:(4 - len(result))]
+
+    sources.append({"hot": hot, "dynamic": dynamic, "extra": extra})
+    return sorted(result)
 
 if __name__ == '__main__':
     app.run(debug=True)
