@@ -9,17 +9,18 @@ hits = 0
 total = 0
 stage = 1
 training = False
+last_result = None
 
 TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <title>4碼預測器</title>
+  <title>5碼預測器</title>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
-  <h2>4碼預測器</h2>
-  <div style='font-size: 14px; color: #888;'>版本：熱2+動熱1+補碼1</div>
+  <h2>5碼預測器</h2>
+  <div style='font-size: 14px;'>版本：熱號2 + 動熱2 + 補碼1（公版UI）</div><br>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -27,28 +28,30 @@ TEMPLATE = """
     <input name='third' id='third' placeholder='季軍' required style='width: 80%; padding: 8px;' inputmode="numeric"><br><br>
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
-
   <br>
-  <a href='/toggle'><button>{{ '關閉訓練模式' if training else '啟動訓練模式' }}</button></a>
-  <a href='/clear'><button>清除資料</button></a>
+  <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
+  <a href='/reset'><button style='margin-left: 10px;'>清除資料</button></a>
 
   {% if prediction %}
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
+  {% elif stage and len(history) >= 5 %}
+    <div style='margin-top: 20px;'>目前第 {{ stage }} 關</div>
   {% endif %}
 
   {% if last_prediction %}
     <div style='margin-top: 10px;'>
       <strong>上期預測號碼：</strong> {{ last_prediction }}
     </div>
+    <div><strong>上期冠軍號碼：</strong> {{ last_result[0] }}</div>
+    <div><strong>是否命中：</strong> {{ last_result[1] }}</div>
   {% endif %}
 
   {% if training %}
-    <div style='margin-top: 20px;'>
+    <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
-      總命中次數：{{ hits }} / {{ total }}<br>
-      命中率：{{ '{:.1f}'.format(hits / total * 100) if total else 0 }}%
+      總命中次數（冠軍號碼）：{{ hits }} / {{ total }}<br>
     </div>
   {% endif %}
 
@@ -78,7 +81,7 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global hits, total, stage, training
+    global hits, total, stage, training, last_result
     prediction = None
     last_prediction = predictions[-1] if predictions else None
 
@@ -90,28 +93,39 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(history) >= 5 or training:
-                prediction = make_prediction()
-                predictions.append(prediction)
-
+            # 判斷是否要統計前一組預測
+            if len(predictions) >= 1 and len(history) > 1:
+                champion = current[0]
+                last = predictions[-1]
+                hit = '命中' if champion in last else '未命中'
+                last_result = (champion, hit)
                 if training:
                     total += 1
-                    if current[0] in prediction:
+                    if hit == '命中':
                         hits += 1
                         stage = 1
                     else:
                         stage += 1
+            elif len(history) > 1:
+                last_result = (current[0], '未比對')
+
+            # 若啟用統計模式或輸入滿 5 組就預測
+            if training or len(history) >= 5:
+                prediction = generate_prediction()
+                predictions.append(prediction)
+
         except:
             prediction = ['格式錯誤']
 
     return render_template_string(TEMPLATE,
         prediction=prediction,
         last_prediction=last_prediction,
+        last_result=last_result,
         stage=stage,
         history_data=history[-10:],
+        training=training,
         hits=hits,
-        total=total,
-        training=training)
+        total=total)
 
 @app.route('/toggle')
 def toggle():
@@ -123,33 +137,30 @@ def toggle():
         stage = 1
     return redirect('/')
 
-@app.route('/clear')
-def clear():
-    global history, predictions, hits, total, stage
-    history.clear()
-    predictions.clear()
+@app.route('/reset')
+def reset():
+    global history, predictions, hits, total, stage, training, last_result
+    history = []
+    predictions = []
     hits = 0
     total = 0
     stage = 1
+    last_result = None
     return redirect('/')
 
-def make_prediction():
+def generate_prediction():
     recent = history[-3:]
-    flat = [n for g in recent for n in g]
+    flat = [n for group in recent for n in group]
     freq = Counter(flat)
-
     hot = [n for n, _ in freq.most_common(3)][:2]
     dynamic_pool = [n for n in freq if n not in hot]
     dynamic_sorted = sorted(dynamic_pool, key=lambda x: (-freq[x], -flat[::-1].index(x)))
-    dynamic = dynamic_sorted[:1] if dynamic_sorted else []
-
-    exclude = set(hot + dynamic)
-    pool = [n for n in range(1, 11) if n not in exclude]
+    dynamic = dynamic_sorted[:2]
+    used = set(hot + dynamic)
+    pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
     extra = pool[:1]
-
-    result = hot + dynamic + extra
-    return sorted(result)
+    return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
     app.run(debug=True)
