@@ -93,7 +93,6 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            # 判斷是否要統計前一組預測
             if len(predictions) >= 1 and len(history) > 1:
                 champion = current[0]
                 last = predictions[-1]
@@ -109,10 +108,12 @@ def index():
             elif len(history) > 1:
                 last_result = (current[0], '未比對')
 
-            # 若啟用統計模式或輸入滿 5 組就預測
             if training or len(history) >= 5:
-                prediction = generate_prediction()
-                predictions.append(prediction)
+                try:
+                    prediction = generate_prediction()
+                    predictions.append(prediction)
+                except:
+                    prediction = ['格式錯誤']
 
         except:
             prediction = ['格式錯誤']
