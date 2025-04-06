@@ -99,13 +99,16 @@ def index():
                 hit = '命中' if champion in last else '未命中'
                 last_result = (champion, hit)
 
+                # 不論是否 training，stage 一定要更新
+                if hit == '命中':
+                    stage = 1
+                else:
+                    stage += 1
+
                 if training:
                     total += 1
                     if hit == '命中':
                         hits += 1
-                        stage = 1
-                    else:
-                        stage += 1
             else:
                 last_result = (current[0], '未比對')
 
