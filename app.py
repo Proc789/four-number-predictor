@@ -1,4 +1,4 @@
-# 完整版 app.py：追關邏輯 7-5-5（公版 UI 不動）
+# 完整版 app.py：追關版（第1關7碼：熱2+動2+補3，第2-6關5碼：熱2+動2+補1）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -165,12 +165,12 @@ def generate_prediction(stage):
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
-    dynamic = [n for n, _ in dynamic_pool[:2]] if stage == 1 else [n for n, _ in dynamic_pool[:1]]
+    dynamic = [n for n, _ in dynamic_pool[:2]]  # 兩碼動熱（全部階段）
 
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
-    extra_count = 3 if stage == 1 else 2
+    extra_count = 3 if stage == 1 else 1
     extra = pool[:extra_count]
 
     return sorted(hot + dynamic + extra)
