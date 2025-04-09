@@ -1,4 +1,4 @@
-# 完整版 app.py：追關版（第1關7碼，第2–3關6碼，第4–6關5碼，顯示建議下注）
+# 完整版 app.py：追關版（第1-2關7碼，第3-4關6碼，失敗提示）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -14,16 +14,6 @@ total_tests = 0
 current_stage = 1
 training_mode = False
 
-# 建議下注金額對應表（每碼）
-bet_table = {
-    1: 4,
-    2: 14,
-    3: 40,
-    4: 86,
-    5: 180,
-    6: 380
-}
-
 TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -33,7 +23,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：第1關7碼，第2-3關6碼，第4-6關5碼（公版UI）</div>
+  <div>版本：第1-2關使用7碼，第3-4關使用6碼（公版UI）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -47,13 +37,18 @@ TEMPLATE = """
 
   {% if prediction %}
     <div style='margin-top: 20px;'>
-      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）<br>
-      建議每碼下注：${{ bet_table.get(stage, '?') }} 元
+      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
   {% endif %}
   {% if last_prediction %}
     <div style='margin-top: 10px;'>
       <strong>上期預測號碼：</strong> {{ last_prediction }}
+    </div>
+  {% endif %}
+
+  {% if stage > 4 %}
+    <div style='color: red; margin-top: 15px;'>
+      已失敗，系統將重置。
     </div>
   {% endif %}
 
@@ -107,7 +102,6 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            # 命中與關卡控制
             if len(predictions) >= 1:
                 champion = current[0]
                 if champion in predictions[-1]:
@@ -116,7 +110,7 @@ def index():
                     current_stage = 1
                 else:
                     current_stage += 1
-                    if current_stage > 6:
+                    if current_stage > 4:
                         history.clear()
                         predictions.clear()
                         current_stage = 1
@@ -147,8 +141,7 @@ def index():
         dynamic_hits=dynamic_hits,
         extra_hits=extra_hits,
         all_hits=all_hits,
-        total_tests=total_tests,
-        bet_table=bet_table)
+        total_tests=total_tests)
 
 @app.route('/toggle')
 def toggle():
@@ -183,12 +176,12 @@ def generate_prediction(stage):
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
 
-    if stage == 1:
-        extra_count = 3
-    elif stage in [2, 3]:
-        extra_count = 2
+    if stage in [1, 2]:
+        extra_count = 3  # 共7碼
+    elif stage in [3, 4]:
+        extra_count = 2  # 共6碼
     else:
-        extra_count = 1
+        extra_count = 0
 
     extra = pool[:extra_count]
     return sorted(hot + dynamic + extra)
