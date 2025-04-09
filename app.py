@@ -1,4 +1,3 @@
-# 完整版 app.py：追關版（第1-2關7碼，第3-4關6碼，失敗提示）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -23,7 +22,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：第1-2關使用7碼，第3-4關使用6碼（公版UI）</div>
+  <div>版本：第1-3關使用7碼，第4關使用6碼（公版UI）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -176,10 +175,10 @@ def generate_prediction(stage):
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
 
-    if stage in [1, 2]:
-        extra_count = 3  # 共7碼
-    elif stage in [3, 4]:
-        extra_count = 2  # 共6碼
+    if stage in [1, 2, 3]:
+        extra_count = 3  # 7碼
+    elif stage == 4:
+        extra_count = 2  # 6碼
     else:
         extra_count = 0
 
