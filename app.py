@@ -165,16 +165,12 @@ def generate_prediction(stage):
     flat = [n for group in recent for n in group]
     freq = Counter(flat)
 
-    # 熱號
     hot = [n for n, _ in freq.most_common(3)][:2]
-
-    # 動熱
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
 
-    # 補碼邏輯（補碼強化）
     used = set(hot + dynamic)
     available = [n for n in range(1, 11) if n not in used]
     random.shuffle(available)
@@ -194,6 +190,12 @@ def generate_prediction(stage):
     if len(extra) < extra_count and cold_pool:
         need = extra_count - len(extra)
         extra += random.sample(cold_pool, min(1, need))
+
+    # 強制補滿碼數（防止總數不足）
+    if len(extra) < extra_count:
+        remaining_pool = [n for n in range(1, 11) if n not in hot + dynamic + extra]
+        random.shuffle(remaining_pool)
+        extra += remaining_pool[:extra_count - len(extra)]
 
     return sorted(hot + dynamic + extra)
 
