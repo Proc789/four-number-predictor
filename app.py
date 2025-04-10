@@ -6,6 +6,7 @@ app = Flask(__name__)
 history = []
 predictions = []
 hot_hits = 0
+hot_pool_hits = 0
 dynamic_hits = 0
 extra_hits = 0
 all_hits = 0
@@ -22,7 +23,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：熱號強化 + 第1-3關 7碼 / 第4關 6碼（公版UI）</div>
+  <div>版本：app-hotboost-v3（加熱號池統計）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -56,6 +57,7 @@ TEMPLATE = """
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
       熱號命中次數：{{ hot_hits }}<br>
+      熱號池命中次數：{{ hot_pool_hits }}<br>
       動熱命中次數：{{ dynamic_hits }}<br>
       補碼命中次數：{{ extra_hits }}<br>
     </div>
@@ -89,7 +91,7 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, training_mode, history, predictions
+    global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, training_mode, history, predictions
     prediction = None
     last_prediction = predictions[-1] if predictions else None
 
@@ -116,12 +118,17 @@ def index():
 
                 if training_mode:
                     total_tests += 1
+                    # 統計區段命中
                     if champion in predictions[-1][:2]:
                         hot_hits += 1
                     elif champion in predictions[-1][2:4]:
                         dynamic_hits += 1
                     elif champion in predictions[-1][4:]:
                         extra_hits += 1
+
+                    # 統計熱號池命中（從上期的 hot_pool 記錄）
+                    if champion in hot_pool:
+                        hot_pool_hits += 1
 
             if training_mode or len(history) >= 5:
                 prediction = generate_prediction(current_stage)
@@ -137,6 +144,7 @@ def index():
         training=training_mode,
         history=history,
         hot_hits=hot_hits,
+        hot_pool_hits=hot_pool_hits,
         dynamic_hits=dynamic_hits,
         extra_hits=extra_hits,
         all_hits=all_hits,
@@ -144,41 +152,41 @@ def index():
 
 @app.route('/toggle')
 def toggle():
-    global training_mode, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
+    global training_mode, hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
     training_mode = not training_mode
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
+    hot_hits = hot_pool_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
     current_stage = 1
     predictions = []
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
+    global history, predictions, hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
     history.clear()
     predictions.clear()
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
+    hot_hits = hot_pool_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
     current_stage = 1
     return redirect('/')
 
 def generate_prediction(stage):
+    global hot_pool  # 用來給統計區判斷是否命中熱號池
     recent = history[-3:]
     flat = [n for group in recent for n in group]
 
-    # 熱號（加權計分）
-    score = {}
+    freq = Counter(flat)
     reversed_flat = flat[::-1]
+    score = {}
     for idx, n in enumerate(reversed_flat):
-        score[n] = score.get(n, 0) + (3 - idx // 3)
+        score[n] = score.get(n, 0) + (3 - idx // 3) + freq[n] * 2
     sorted_hot = sorted(score.items(), key=lambda x: (-x[1], -reversed_flat.index(x[0])))
-    hot = [n for n, _ in sorted_hot[:2]]
+    hot_pool = [n for n, _ in sorted_hot[:4]]  # 統計用：熱號池前4名
+    hot = hot_pool[:2]  # 實際熱號只取前2名
 
-    # 動熱
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
 
-    # 決定補碼數量（依關卡而定）
     if stage in [1, 2, 3]:
         extra_count = 3
     elif stage == 4:
@@ -196,8 +204,7 @@ def generate_prediction(stage):
 
     extra = random.sample(safe_pool, min(extra_count, len(safe_pool)))
     if len(extra) < extra_count and cold_pool:
-        need = extra_count - len(extra)
-        extra += random.sample(cold_pool, min(1, need))
+        extra += random.sample(cold_pool, min(1, extra_count - len(extra)))
 
     if len(extra) < extra_count:
         remaining_pool = [n for n in range(1, 11) if n not in hot + dynamic + extra]
