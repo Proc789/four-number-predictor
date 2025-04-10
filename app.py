@@ -22,7 +22,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：第1-3關使用7碼，第4關使用6碼（公版UI）</div>
+  <div>版本：加權熱號 + 補碼2碼（第1-3關使用7碼→調整為6碼）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -163,24 +163,26 @@ def reset():
 def generate_prediction(stage):
     recent = history[-3:]
     flat = [n for group in recent for n in group]
-    freq = Counter(flat)
 
-    hot = [n for n, _ in freq.most_common(3)][:2]
+    # 熱號（加權出現頻率）
+    score = {}
+    reversed_flat = flat[::-1]
+    for idx, n in enumerate(reversed_flat):
+        score[n] = score.get(n, 0) + (3 - idx // 3)  # 最近3期：3分、2分、1分
+    sorted_hot = sorted(score.items(), key=lambda x: (-x[1], -reversed_flat.index(x[0])))
+    hot = [n for n, _ in sorted_hot[:2]]
+
+    # 動熱（排除熱號再統計）
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
 
+    # 補碼（不論階段最多只取 2 碼）
+    extra_count = 2
     used = set(hot + dynamic)
     available = [n for n in range(1, 11) if n not in used]
     random.shuffle(available)
-
-    if stage in [1, 2, 3]:
-        extra_count = 3
-    elif stage == 4:
-        extra_count = 2
-    else:
-        extra_count = 0
 
     recent_unique = set(flat)
     safe_pool = [n for n in available if n in recent_unique]
@@ -191,7 +193,6 @@ def generate_prediction(stage):
         need = extra_count - len(extra)
         extra += random.sample(cold_pool, min(1, need))
 
-    # 強制補滿碼數（防止總數不足）
     if len(extra) < extra_count:
         remaining_pool = [n for n in range(1, 11) if n not in hot + dynamic + extra]
         random.shuffle(remaining_pool)
