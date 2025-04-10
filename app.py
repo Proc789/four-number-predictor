@@ -12,9 +12,12 @@ extra_hits = 0
 all_hits = 0
 total_tests = 0
 current_stage = 1
+actual_bet_stage = 1
 training_mode = False
 last_hot_pool_hit = False
 last_champion_zone = ""
+rhythm_history = []  # 最近5期熱號池命中紀錄
+rhythm_state = "未知"
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -25,7 +28,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v4-plus（提示冠軍落點）</div>
+  <div>版本：app-hotboost-v5-rhythm（下注追蹤 + 熱號池節奏）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -39,7 +42,7 @@ TEMPLATE = """
 
   {% if prediction %}
     <div style='margin-top: 20px;'>
-      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
+      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關 / 建議下注第 {{ bet_stage }} 關）
     </div>
   {% endif %}
   {% if last_prediction %}
@@ -65,6 +68,9 @@ TEMPLATE = """
         冠軍號碼開在：{{ last_champion_zone }}
       </div>
     {% endif %}
+    <div style='margin-top: 10px;'>
+      熱號池節奏狀態：{{ rhythm_state }}
+    </div>
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
@@ -104,7 +110,9 @@ TEMPLATE = """
 @app.route('/', methods=['GET', 'POST'])
 def index():
     global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
-    global current_stage, training_mode, history, predictions, last_hot_pool_hit, last_champion_zone
+    global current_stage, actual_bet_stage, training_mode, history, predictions
+    global last_hot_pool_hit, last_champion_zone, rhythm_history, rhythm_state
+
     prediction = None
     last_prediction = predictions[-1] if predictions else None
     last_hot_pool_hit = False
@@ -125,12 +133,16 @@ def index():
                     if training_mode:
                         all_hits += 1
                     current_stage = 1
+                    actual_bet_stage = 1
                 else:
                     current_stage += 1
+                    if training_mode:
+                        actual_bet_stage += 1
                     if current_stage > 4:
                         history.clear()
                         predictions.clear()
                         current_stage = 1
+                        actual_bet_stage = 1
 
                 if training_mode:
                     total_tests += 1
@@ -151,6 +163,21 @@ def index():
                         if champion not in last_pred:
                             last_hot_pool_hit = True
 
+                    rhythm_history.append(1 if champion in hot_pool else 0)
+                    if len(rhythm_history) > 5:
+                        rhythm_history.pop(0)
+
+                    recent = rhythm_history[-3:]
+                    total = sum(recent)
+                    if recent == [0, 0, 1]:
+                        rhythm_state = "預熱期"
+                    elif total >= 2:
+                        rhythm_state = "穩定期"
+                    elif total == 0:
+                        rhythm_state = "失準期"
+                    else:
+                        rhythm_state = "搖擺期"
+
             if training_mode or len(history) >= 5:
                 prediction = generate_prediction(current_stage)
                 predictions.append(prediction)
@@ -162,6 +189,7 @@ def index():
         prediction=prediction,
         last_prediction=last_prediction,
         stage=current_stage,
+        bet_stage=actual_bet_stage,
         training=training_mode,
         history=history,
         hot_hits=hot_hits,
@@ -171,24 +199,29 @@ def index():
         all_hits=all_hits,
         total_tests=total_tests,
         last_hot_pool_hit=last_hot_pool_hit,
-        last_champion_zone=last_champion_zone)
+        last_champion_zone=last_champion_zone,
+        rhythm_state=rhythm_state)
 
 @app.route('/toggle')
 def toggle():
-    global training_mode, hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
+    global training_mode, hot_hits, hot_pool_hits, dynamic_hits, extra_hits
+    global all_hits, total_tests, current_stage, actual_bet_stage, predictions
     training_mode = not training_mode
     hot_hits = hot_pool_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
-    current_stage = 1
+    current_stage = actual_bet_stage = 1
     predictions = []
     return redirect('/')
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage
+    global history, predictions, hot_hits, hot_pool_hits, dynamic_hits, extra_hits
+    global all_hits, total_tests, current_stage, actual_bet_stage, rhythm_history, rhythm_state
     history.clear()
     predictions.clear()
     hot_hits = hot_pool_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
-    current_stage = 1
+    current_stage = actual_bet_stage = 1
+    rhythm_history.clear()
+    rhythm_state = "未知"
     return redirect('/')
 
 def generate_prediction(stage):
