@@ -13,7 +13,8 @@ all_hits = 0
 total_tests = 0
 current_stage = 1
 training_mode = False
-last_hot_pool_hit = False  # 熱號池命中但未中預測，用來提示
+last_hot_pool_hit = False
+last_champion_zone = ""
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -24,7 +25,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v4（熱號池命中提示）</div>
+  <div>版本：app-hotboost-v4-plus（提示冠軍落點）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -57,6 +58,11 @@ TEMPLATE = """
     {% if last_hot_pool_hit %}
       <div style='color: green; margin-top: 15px; font-weight: bold;'>
         上期熱號池有命中，預測方向正確，建議持續追關。
+      </div>
+    {% endif %}
+    {% if last_champion_zone %}
+      <div style='margin-top: 10px;'>
+        冠軍號碼開在：{{ last_champion_zone }}
       </div>
     {% endif %}
     <div style='margin-top: 20px; text-align: left;'>
@@ -98,10 +104,11 @@ TEMPLATE = """
 @app.route('/', methods=['GET', 'POST'])
 def index():
     global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
-    global current_stage, training_mode, history, predictions, last_hot_pool_hit
+    global current_stage, training_mode, history, predictions, last_hot_pool_hit, last_champion_zone
     prediction = None
     last_prediction = predictions[-1] if predictions else None
     last_hot_pool_hit = False
+    last_champion_zone = ""
 
     if request.method == 'POST':
         try:
@@ -113,7 +120,8 @@ def index():
 
             if len(predictions) >= 1:
                 champion = current[0]
-                if champion in predictions[-1]:
+                last_pred = predictions[-1]
+                if champion in last_pred:
                     if training_mode:
                         all_hits += 1
                     current_stage = 1
@@ -126,16 +134,21 @@ def index():
 
                 if training_mode:
                     total_tests += 1
-                    if champion in predictions[-1][:2]:
+                    if champion in last_pred[:2]:
                         hot_hits += 1
-                    elif champion in predictions[-1][2:4]:
+                        last_champion_zone = "熱號區"
+                    elif champion in last_pred[2:4]:
                         dynamic_hits += 1
-                    elif champion in predictions[-1][4:]:
+                        last_champion_zone = "動熱區"
+                    elif champion in last_pred[4:]:
                         extra_hits += 1
+                        last_champion_zone = "補碼區"
+                    else:
+                        last_champion_zone = "未預測組合"
 
                     if champion in hot_pool:
                         hot_pool_hits += 1
-                        if champion not in predictions[-1]:
+                        if champion not in last_pred:
                             last_hot_pool_hit = True
 
             if training_mode or len(history) >= 5:
@@ -157,7 +170,8 @@ def index():
         extra_hits=extra_hits,
         all_hits=all_hits,
         total_tests=total_tests,
-        last_hot_pool_hit=last_hot_pool_hit)
+        last_hot_pool_hit=last_hot_pool_hit,
+        last_champion_zone=last_champion_zone)
 
 @app.route('/toggle')
 def toggle():
