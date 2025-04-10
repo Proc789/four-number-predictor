@@ -164,25 +164,37 @@ def generate_prediction(stage):
     recent = history[-3:]
     flat = [n for group in recent for n in group]
     freq = Counter(flat)
+
+    # 熱號
     hot = [n for n, _ in freq.most_common(3)][:2]
 
+    # 動熱
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
 
+    # 補碼邏輯（補碼強化）
     used = set(hot + dynamic)
-    pool = [n for n in range(1, 11) if n not in used]
-    random.shuffle(pool)
+    available = [n for n in range(1, 11) if n not in used]
+    random.shuffle(available)
 
     if stage in [1, 2, 3]:
-        extra_count = 3  # 7碼
+        extra_count = 3
     elif stage == 4:
-        extra_count = 2  # 6碼
+        extra_count = 2
     else:
         extra_count = 0
 
-    extra = pool[:extra_count]
+    recent_unique = set(flat)
+    safe_pool = [n for n in available if n in recent_unique]
+    cold_pool = [n for n in available if n not in recent_unique]
+
+    extra = random.sample(safe_pool, min(extra_count, len(safe_pool)))
+    if len(extra) < extra_count and cold_pool:
+        need = extra_count - len(extra)
+        extra += random.sample(cold_pool, min(1, need))
+
     return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
