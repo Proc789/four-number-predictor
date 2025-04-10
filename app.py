@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期穩定版：預測固定用下注階段）
+# app-hotboost-v5-rhythm（觀察期穩定版 + generate_prediction 修正）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -137,4 +137,26 @@ def index():
         rhythm_state=rhythm_state,
         observation_message=observation_message)
 
-# 其他函式與 TEMPLATE 保持不變
+
+def generate_prediction(stage):
+    recent = history[-3:]
+    flat = [n for group in recent for n in group]
+    freq = Counter(flat)
+    hot = [n for n, _ in freq.most_common(4)][:2]
+
+    flat_dynamic = [n for n in flat if n not in hot]
+    freq_dyn = Counter(flat_dynamic)
+    dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
+    dynamic = [n for n, _ in dynamic_pool[:2]]
+
+    global hot_pool
+    hot_pool = [n for n, _ in freq.most_common(4)]
+
+    used = set(hot + dynamic)
+    pool = [n for n in range(1, 11) if n not in used]
+    random.shuffle(pool)
+
+    extra_count = 3 if stage in [1, 2, 3] else 2
+    extra = pool[:extra_count]
+
+    return sorted(hot + dynamic + extra)
