@@ -13,6 +13,7 @@ all_hits = 0
 total_tests = 0
 current_stage = 1
 training_mode = False
+last_hot_pool_hit = False  # 熱號池命中但未中預測，用來提示
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -23,7 +24,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v3（加熱號池統計）</div>
+  <div>版本：app-hotboost-v4（熱號池命中提示）</div>
 
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
@@ -53,6 +54,11 @@ TEMPLATE = """
   {% endif %}
 
   {% if training %}
+    {% if last_hot_pool_hit %}
+      <div style='color: green; margin-top: 15px; font-weight: bold;'>
+        上期熱號池有命中，預測方向正確，建議持續追關。
+      </div>
+    {% endif %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
@@ -91,9 +97,11 @@ TEMPLATE = """
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, training_mode, history, predictions
+    global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
+    global current_stage, training_mode, history, predictions, last_hot_pool_hit
     prediction = None
     last_prediction = predictions[-1] if predictions else None
+    last_hot_pool_hit = False
 
     if request.method == 'POST':
         try:
@@ -118,7 +126,6 @@ def index():
 
                 if training_mode:
                     total_tests += 1
-                    # 統計區段命中
                     if champion in predictions[-1][:2]:
                         hot_hits += 1
                     elif champion in predictions[-1][2:4]:
@@ -126,9 +133,10 @@ def index():
                     elif champion in predictions[-1][4:]:
                         extra_hits += 1
 
-                    # 統計熱號池命中（從上期的 hot_pool 記錄）
                     if champion in hot_pool:
                         hot_pool_hits += 1
+                        if champion not in predictions[-1]:
+                            last_hot_pool_hit = True
 
             if training_mode or len(history) >= 5:
                 prediction = generate_prediction(current_stage)
@@ -148,7 +156,8 @@ def index():
         dynamic_hits=dynamic_hits,
         extra_hits=extra_hits,
         all_hits=all_hits,
-        total_tests=total_tests)
+        total_tests=total_tests,
+        last_hot_pool_hit=last_hot_pool_hit)
 
 @app.route('/toggle')
 def toggle():
@@ -169,7 +178,7 @@ def reset():
     return redirect('/')
 
 def generate_prediction(stage):
-    global hot_pool  # 用來給統計區判斷是否命中熱號池
+    global hot_pool
     recent = history[-3:]
     flat = [n for group in recent for n in group]
 
@@ -179,21 +188,15 @@ def generate_prediction(stage):
     for idx, n in enumerate(reversed_flat):
         score[n] = score.get(n, 0) + (3 - idx // 3) + freq[n] * 2
     sorted_hot = sorted(score.items(), key=lambda x: (-x[1], -reversed_flat.index(x[0])))
-    hot_pool = [n for n, _ in sorted_hot[:4]]  # 統計用：熱號池前4名
-    hot = hot_pool[:2]  # 實際熱號只取前2名
+    hot_pool = [n for n, _ in sorted_hot[:4]]
+    hot = hot_pool[:2]
 
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
 
-    if stage in [1, 2, 3]:
-        extra_count = 3
-    elif stage == 4:
-        extra_count = 2
-    else:
-        extra_count = 0
-
+    extra_count = 3 if stage in [1, 2, 3] else 2
     used = set(hot + dynamic)
     available = [n for n in range(1, 11) if n not in used]
     random.shuffle(available)
@@ -205,7 +208,6 @@ def generate_prediction(stage):
     extra = random.sample(safe_pool, min(extra_count, len(safe_pool)))
     if len(extra) < extra_count and cold_pool:
         extra += random.sample(cold_pool, min(1, extra_count - len(extra)))
-
     if len(extra) < extra_count:
         remaining_pool = [n for n in range(1, 11) if n not in hot + dynamic + extra]
         random.shuffle(remaining_pool)
