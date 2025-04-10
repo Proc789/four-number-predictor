@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期預測依照實際下注階段）
+# app-hotboost-v5-rhythm（觀察期穩定版：預測固定用下注階段）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -27,12 +27,13 @@ observation_message = ""
 
 @app.route('/observe')
 def observe():
-    global observation_next, was_observed, observation_message
+    global was_observed, observation_next, observation_message
     was_observed = True
     observation_next = False
     observation_message = "上期為觀察期"
     if training_mode or len(history) >= 5:
-        prediction = generate_prediction(actual_bet_stage)  # 改用實際下注階段
+        stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
+        prediction = generate_prediction(stage_to_use)
         predictions.append(prediction)
     return redirect('/')
 
@@ -109,12 +110,13 @@ def index():
                     else:
                         rhythm_state = "搖擺期"
 
-            prediction = generate_prediction(current_stage)
+            stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
+            prediction = generate_prediction(stage_to_use)
             predictions.append(prediction)
             was_observed = False
             observation_message = ""
 
-        except:
+        except Exception as e:
             prediction = ['格式錯誤']
 
     return render_template_string(TEMPLATE,
@@ -135,4 +137,4 @@ def index():
         rhythm_state=rhythm_state,
         observation_message=observation_message)
 
-# 其他邏輯與模板保持一致
+# 其他函式與 TEMPLATE 保持不變
