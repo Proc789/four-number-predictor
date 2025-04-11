@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期穩定版 + 完整部署用）
+# app-hotboost-v5-rhythm（觀察期不跳關 + 自動產出預測 + 公版 UI）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -35,11 +35,11 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding: 20px; font-family: sans-serif;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v5-rhythm（下注追蹤 + 熱號池節奏 + 觀察開關）</div><br>
+  <div>版本：app-hotboost-v5-rhythm（下注追蹤 + 熱號池節奏 + 觀察穩定）</div><br>
   <form method='POST'>
-    <input name='first' placeholder='冠軍' required style='width: 100%; padding: 8px;' inputmode='numeric'><br><br>
-    <input name='second' placeholder='亞軍' required style='width: 100%; padding: 8px;' inputmode='numeric'><br><br>
-    <input name='third' placeholder='季軍' required style='width: 100%; padding: 8px;' inputmode='numeric'><br><br>
+    <input name='first' id='first' placeholder='冠軍' required style='width: 100%; padding: 8px;' inputmode='numeric' oninput="moveToNext(this, 'second')"><br><br>
+    <input name='second' id='second' placeholder='亞軍' required style='width: 100%; padding: 8px;' inputmode='numeric' oninput="moveToNext(this, 'third')"><br><br>
+    <input name='third' id='third' placeholder='季軍' required style='width: 100%; padding: 8px;' inputmode='numeric'><br><br>
     <button type='submit' style='width: 100%; padding: 10px;'>提交</button>
   </form>
   <br>
@@ -80,20 +80,33 @@ TEMPLATE = """
       </ul>
     </div>
   {% endif %}
+  <script>
+    function moveToNext(current, nextId) {
+      setTimeout(() => {
+        if (current.value === '0') current.value = '10';
+        let val = parseInt(current.value);
+        if (!isNaN(val) && val >= 1 && val <= 10) {
+          document.getElementById(nextId).focus();
+        }
+      }, 100);
+    }
+  </script>
 </body>
 </html>
 """
 
 @app.route('/observe')
 def observe():
-    global was_observed, observation_next, observation_message
+    global was_observed, observation_next, observation_message, predictions
     was_observed = True
     observation_next = False
     observation_message = "上期為觀察期"
+
     if training_mode or len(history) >= 5:
         stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
         prediction = generate_prediction(stage_to_use)
         predictions.append(prediction)
+
     return redirect('/')
 
 @app.route('/toggle')
@@ -193,7 +206,7 @@ def index():
             was_observed = False
             observation_message = ""
 
-        except Exception as e:
+        except:
             prediction = ['格式錯誤']
 
     return render_template_string(TEMPLATE,
@@ -213,7 +226,6 @@ def index():
         last_champion_zone=last_champion_zone,
         rhythm_state=rhythm_state,
         observation_message=observation_message)
-
 
 def generate_prediction(stage):
     recent = history[-3:]
