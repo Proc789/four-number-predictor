@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期更新節奏 + 命中統計 + 保底補碼 + 公版UI）
+# app-hotboost-v5-rhythm（觀察期節奏修正 + 正確熱號池對齊 + 公版UI）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -6,6 +6,8 @@ from collections import Counter
 app = Flask(__name__)
 history = []
 predictions = []
+hot_pool_history = []
+hot_pool = []
 hot_hits = 0
 hot_pool_hits = 0
 dynamic_hits = 0
@@ -21,7 +23,6 @@ rhythm_history = []
 rhythm_state = "未知"
 was_observed = False
 observation_message = ""
-hot_pool = []
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -104,15 +105,18 @@ TEMPLATE = """
 @app.route('/observe')
 def observe():
     global was_observed, observation_message
-    global rhythm_history, rhythm_state, last_champion_zone, last_hot_pool_hit, hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
+    global rhythm_history, rhythm_state, last_champion_zone, last_hot_pool_hit
+    global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
 
     was_observed = True
     observation_message = "上期為觀察期"
 
-    if len(predictions) >= 1 and len(history) > 0:
+    if len(predictions) >= 1 and len(history) > 0 and len(hot_pool_history) >= 2:
         current = history[-1]
         champion = current[0]
         last_pred = predictions[-1]
+        this_hot_pool = hot_pool_history[-2]
+
         if training_mode:
             total_tests += 1
             if champion in last_pred[:2]:
@@ -126,11 +130,13 @@ def observe():
                 last_champion_zone = "補碼區"
             else:
                 last_champion_zone = "未預測組合"
-            if champion in hot_pool:
+
+            if champion in this_hot_pool:
                 hot_pool_hits += 1
                 if champion not in last_pred:
                     last_hot_pool_hit = True
-            rhythm_history.append(1 if champion in hot_pool else 0)
+
+            rhythm_history.append(1 if champion in this_hot_pool else 0)
             if len(rhythm_history) > 5:
                 rhythm_history.pop(0)
             recent = rhythm_history[-3:]
@@ -160,9 +166,10 @@ def toggle():
 
 @app.route('/reset')
 def reset():
-    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, hot_pool_hits
+    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, hot_pool_hits, hot_pool_history
     history.clear()
     predictions.clear()
+    hot_pool_history.clear()
     hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
     current_stage = actual_bet_stage = 1
     return redirect('/')
@@ -187,10 +194,12 @@ def index():
             current = [first, second, third]
             history.append(current)
 
-            if len(predictions) >= 1:
+            if len(predictions) >= 1 and len(hot_pool_history) >= 2:
                 champion = current[0]
                 last_pred = predictions[-1]
+                this_hot_pool = hot_pool_history[-2]
                 hit = champion in last_pred
+
                 if hit:
                     if training_mode:
                         all_hits += 1
@@ -202,6 +211,7 @@ def index():
                     if current_stage > 4:
                         history.clear()
                         predictions.clear()
+                        hot_pool_history.clear()
                         current_stage = actual_bet_stage = 1
 
                 if training_mode:
@@ -218,12 +228,12 @@ def index():
                     else:
                         last_champion_zone = "未預測組合"
 
-                    if champion in hot_pool:
+                    if champion in this_hot_pool:
                         hot_pool_hits += 1
                         if champion not in last_pred:
                             last_hot_pool_hit = True
 
-                    rhythm_history.append(1 if champion in hot_pool else 0)
+                    rhythm_history.append(1 if champion in this_hot_pool else 0)
                     if len(rhythm_history) > 5:
                         rhythm_history.pop(0)
                     recent = rhythm_history[-3:]
@@ -277,6 +287,7 @@ def generate_prediction(stage):
 
     global hot_pool
     hot_pool = [n for n, _ in freq.most_common(4)]
+    hot_pool_history.append(hot_pool.copy())
 
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
