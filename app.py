@@ -98,7 +98,7 @@ def observe():
         history.append(current)
 
         if len(history) >= 5:
-            stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
+            stage_to_use = current_stage if 1 <= current_stage <= 4 else 4
             prediction = make_prediction(stage_to_use)
             predictions.append(prediction)
 
@@ -142,7 +142,7 @@ def index():
             history.append(current)
 
             if len(history) >= 5 or training_enabled:
-                stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
+                stage_to_use = current_stage if 1 <= current_stage <= 4 else 4
                 prediction = make_prediction(stage_to_use)
                 predictions.append(prediction)
 
