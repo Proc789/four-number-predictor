@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（最終完整修正版）
+# app-hotboost-v5-rhythm（完整修正版：處理 0→10 輸入 + 公版UI + 自動跳格 + 節奏）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -24,6 +24,10 @@ observation_message = ""
 hot_pool = []
 last_error_message = ""
 
+# 0 輸入轉換處理
+def parse_input(val):
+    return 10 if val == '0' else int(val or 10)
+
 TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -45,7 +49,6 @@ TEMPLATE = """
   <a href='/observe'><button>觀察本期</button></a>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
   <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
-
   {% if prediction %}
     <div style='margin-top: 20px;'>
       <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關 / 建議下注第 {{ bet_stage }} 關）
@@ -134,9 +137,9 @@ def index():
 
     if request.method == 'POST':
         try:
-            first = int(request.form['first'] or 10)
-            second = int(request.form['second'] or 10)
-            third = int(request.form['third'] or 10)
+            first = parse_input(request.form['first'])
+            second = parse_input(request.form['second'])
+            third = parse_input(request.form['third'])
             if not (1 <= first <= 10 and 1 <= second <= 10 and 1 <= third <= 10):
                 raise ValueError("輸入號碼必須是 1 到 10")
             current = [first, second, third]
