@@ -49,7 +49,7 @@ TEMPLATE = """
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
   <br>
-  <form method='GET' action='/observe'>
+  <form method='GET' action='/observe' onsubmit="syncBeforeObserve()">
     <input type='hidden' name='first' id='first_obs'>
     <input type='hidden' name='second' id='second_obs'>
     <input type='hidden' name='third' id='third_obs'>
@@ -97,10 +97,12 @@ TEMPLATE = """
         if (!isNaN(val) && val >= 1 && val <= 10) {
           document.getElementById(nextId).focus();
         }
-        document.getElementById('first_obs').value = document.getElementById('first').value;
-        document.getElementById('second_obs').value = document.getElementById('second').value;
-        document.getElementById('third_obs').value = document.getElementById('third').value;
       }, 100);
+    }
+    function syncBeforeObserve() {
+      document.getElementById('first_obs').value = document.getElementById('first').value;
+      document.getElementById('second_obs').value = document.getElementById('second').value;
+      document.getElementById('third_obs').value = document.getElementById('third').value;
     }
   </script>
 </body>
