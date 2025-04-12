@@ -116,6 +116,7 @@ def observe():
             predictions.append(prediction)
             champion = current[0]
             hot_pool = sources[-1]['hot'] + sources[-1]['dynamic'] if sources else []
+
             rhythm_history.append(1 if champion in hot_pool else 0)
             if len(rhythm_history) > 5:
                 rhythm_history.pop(0)
@@ -132,6 +133,7 @@ def observe():
     except:
         pass
     return redirect('/')
+
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
