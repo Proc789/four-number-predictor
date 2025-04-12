@@ -28,7 +28,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>7碼預測器</h2>
-  <div>版本：熱號2 + 動熱2 + 補碼3（第4關補碼改為2碼）</div>
+  <div>版本：熱號2 + 動熱2 + 補碼3（第4關為補碼2）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -61,9 +61,9 @@ TEMPLATE = """
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
-      熱號命中次數：{{ hot_hits }} / {{ total_tests }}<br>
-      動熱命中次數：{{ dynamic_hits }} / {{ total_tests }}<br>
-      補碼命中次數：{{ extra_hits }} / {{ total_tests }}<br>
+      熱號命中次數：{{ hot_hits }}<br>
+      動熱命中次數：{{ dynamic_hits }}<br>
+      補碼命中次數：{{ extra_hits }}<br>
     </div>
   {% endif %}
   {% if history %}
@@ -116,7 +116,6 @@ def observe():
             predictions.append(prediction)
             champion = current[0]
             hot_pool = sources[-1]['hot'] + sources[-1]['dynamic'] if sources else []
-
             rhythm_history.append(1 if champion in hot_pool else 0)
             if len(rhythm_history) > 5:
                 rhythm_history.pop(0)
@@ -133,7 +132,6 @@ def observe():
     except:
         pass
     return redirect('/')
-
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -236,7 +234,6 @@ def make_prediction(stage):
     freq = Counter(flat)
 
     hot = [n for n, _ in freq.most_common(3)][:2]
-
     dynamic_pool = [n for n in freq if n not in hot]
     dynamic_sorted = sorted(dynamic_pool, key=lambda x: (-freq[x], -flat[::-1].index(x)))
     dynamic = dynamic_sorted[:2]
