@@ -27,9 +27,10 @@ def parse_input(val):
     try:
         if val is None or val == "":
             raise ValueError("輸入為空")
-        num = int(val)
-        if num == 0:
+        val = str(val).strip()
+        if val == '0':
             return 10
+        num = int(val)
         if 1 <= num <= 10:
             return num
         raise ValueError
