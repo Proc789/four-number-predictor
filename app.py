@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期節奏修正 + 正確熱號池對齊 + 公版UI）
+# app-hotboost-v5-rhythm（觀察期節奏修正 + 熱號池對齊 + 納入觀察紀錄 + 公版UI）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -150,6 +150,14 @@ def observe():
             else:
                 rhythm_state = "搖擺期"
 
+    try:
+        first = int(request.args.get('first'))
+        second = int(request.args.get('second'))
+        third = int(request.args.get('third'))
+        history.append([first, second, third])
+    except:
+        pass
+
     stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
     prediction = generate_prediction(stage_to_use)
     predictions.append(prediction)
@@ -273,6 +281,7 @@ def index():
         last_champion_zone=last_champion_zone,
         rhythm_state=rhythm_state,
         observation_message=observation_message)
+
 
 def generate_prediction(stage):
     recent = history[-3:]
