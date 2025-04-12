@@ -1,5 +1,5 @@
-# app-hotboost-v5-rhythm（完整修正版：處理 0→10 輸入 + 外部節奏修正 + 公版UI）
-from flask import Flask, render_template_string, request, redirect
+# app-hotboost-v5-rhythm（修正觀察期節奏不更新 + 公版UI + 自動跳格）
+from flask import Flask, render_template_string, request, redirect, request
 import random
 from collections import Counter
 
@@ -45,7 +45,12 @@ TEMPLATE = """
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
   <br>
-  <a href='/observe'><button>觀察本期</button></a>
+  <form method='GET' action='/observe'>
+    <input type='hidden' name='first' id='first_obs'>
+    <input type='hidden' name='second' id='second_obs'>
+    <input type='hidden' name='third' id='third_obs'>
+    <button type='submit'>觀察本期</button>
+  </form>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
   <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
   {% if prediction %}
@@ -88,6 +93,9 @@ TEMPLATE = """
         if (!isNaN(val) && val >= 1 && val <= 10) {
           document.getElementById(nextId).focus();
         }
+        document.getElementById('first_obs').value = document.getElementById('first').value;
+        document.getElementById('second_obs').value = document.getElementById('second').value;
+        document.getElementById('third_obs').value = document.getElementById('third').value;
       }, 100);
     }
   </script>
@@ -100,21 +108,18 @@ def observe():
     global was_observed, observation_message
     was_observed = True
     observation_message = "上期為觀察期"
-    if history:
-        data = history[-1]
-        process_input(data, is_observe=True)
+    try:
+        first = parse_input(request.args.get('first', ''))
+        second = parse_input(request.args.get('second', ''))
+        third = parse_input(request.args.get('third', ''))
+        current = [first, second, third]
+        history.append(current)
+        process_input(current, is_observe=True)
+    except:
+        pass
     stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
     prediction = generate_prediction(stage_to_use)
     predictions.append(prediction)
-    return redirect('/')
-
-@app.route('/toggle')
-def toggle():
-    global training_mode, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, predictions, hot_pool_hits
-    training_mode = not training_mode
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
-    current_stage = actual_bet_stage = 1
-    predictions = []
     return redirect('/')
 
 @app.route('/reset')
