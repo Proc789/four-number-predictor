@@ -153,7 +153,7 @@ def index():
                         current_stage = 1
                     else:
                         if not was_observed:
-                            current_stage += 1
+                            current_stage = min(current_stage + 1, 4)
 
                     if training_enabled:
                         total_tests += 1
