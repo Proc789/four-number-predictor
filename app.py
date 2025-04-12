@@ -110,6 +110,7 @@ def observe():
         third = int(request.args.get('third', '10'))
         current = [first, second, third]
         history.append(current)
+
         if len(history) >= 5:
             prediction = make_prediction(current_stage)
             predictions.append(prediction)
