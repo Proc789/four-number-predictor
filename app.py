@@ -23,12 +23,13 @@ TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <title>7碼預測器</title>
+  <meta charset='utf-8'>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
+  <title>預測器</title>
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
-  <h2>7碼預測器</h2>
-  <div>版本：熱號2 + 動熱2 + 補碼3（第4關為補碼2）</div>
+  <h2>預測器</h2>
+  <div>版本：修正版（第4關 6碼 + 公版UI）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -36,17 +37,12 @@ TEMPLATE = """
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
   <br>
-  <form method='GET' action='/observe' onsubmit="syncBeforeObserve()">
-    <input type='hidden' name='first' id='first_obs'>
-    <input type='hidden' name='second' id='second_obs'>
-    <input type='hidden' name='third' id='third_obs'>
-    <button type='submit'>觀察本期</button>
-  </form>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
-  <a href='/reset'><button>清除所有資料</button></a>
+  <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
   {% if prediction %}
     <div style='margin-top: 20px;'>
-      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
+      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）<br>
+      預測碼數量：{{ prediction|length }} 碼
     </div>
   {% endif %}
   {% if last_prediction %}
@@ -54,13 +50,9 @@ TEMPLATE = """
       <strong>上期預測號碼：</strong> {{ last_prediction }}
     </div>
   {% endif %}
-  {% if last_champion_zone %}
-    <div>冠軍號碼開在：{{ last_champion_zone }}</div>
-  {% endif %}
-  {% if observation_message %}
-    <div style='color: gray;'>{{ observation_message }}</div>
-  {% endif %}
-  <div>熱號池節奏狀態：{{ rhythm_state }}</div>
+  {% if last_champion_zone %}<div>冠軍號碼開在：{{ last_champion_zone }}</div>{% endif %}
+  {% if observation_message %}<div style='color: gray;'>{{ observation_message }}</div>{% endif %}
+  <div>熱號節奏狀態：{{ rhythm_state }}</div>
   {% if training %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
@@ -74,9 +66,7 @@ TEMPLATE = """
     <div style='margin-top: 20px; text-align: left;'>
       <strong>最近輸入紀錄：</strong>
       <ul>
-        {% for row in history[-10:] %}
-          <li>{{ row }}</li>
-        {% endfor %}
+        {% for row in history[-10:] %}<li>{{ row }}</li>{% endfor %}
       </ul>
     </div>
   {% endif %}
@@ -88,15 +78,7 @@ TEMPLATE = """
         if (!isNaN(val) && val >= 1 && val <= 10) {
           document.getElementById(nextId).focus();
         }
-        document.getElementById('first_obs').value = document.getElementById('first').value;
-        document.getElementById('second_obs').value = document.getElementById('second').value;
-        document.getElementById('third_obs').value = document.getElementById('third').value;
       }, 100);
-    }
-    function syncBeforeObserve() {
-      document.getElementById('first_obs').value = document.getElementById('first').value;
-      document.getElementById('second_obs').value = document.getElementById('second').value;
-      document.getElementById('third_obs').value = document.getElementById('third').value;
     }
   </script>
 </body>
