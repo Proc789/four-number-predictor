@@ -24,7 +24,12 @@ hot_pool = []
 last_error_message = ""
 
 def parse_input(val):
-    return 10 if val == '0' else int(val or 10)
+    if val == '0' or val == 0:
+        return 10
+    try:
+        return int(val)
+    except:
+        return 10
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -36,7 +41,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v5-rhythm（完整修正版）</div>
+  <div>版本：app-hotboost-v5-rhythm（修正版：節奏 + 公版UI + 自動跳格）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -159,9 +164,9 @@ def index():
             predictions.append(prediction)
             was_observed = False
             observation_message = ""
-        except Exception as e:
+        except:
+            prediction = ['格式錯誤']
             last_error_message = "輸入號碼必須是 1 到 10"
-            prediction = ["格式錯誤"]
 
     return render_template_string(TEMPLATE,
         prediction=prediction,
@@ -210,18 +215,19 @@ def process_input(current, is_observe=False):
                 current_stage = actual_bet_stage = 1
 
     if training_mode or is_observe:
-        total_tests += 1
-        if champion in last_pred[:2]:
-            hot_hits += 1
-            last_champion_zone = "熱號區"
-        elif champion in last_pred[2:4]:
-            dynamic_hits += 1
-            last_champion_zone = "動熱區"
-        elif champion in last_pred[4:]:
-            extra_hits += 1
-            last_champion_zone = "補碼區"
-        else:
-            last_champion_zone = "未預測組合"
+        if training_mode:
+            total_tests += 1
+            if champion in last_pred[:2]:
+                hot_hits += 1
+                last_champion_zone = "熱號區"
+            elif champion in last_pred[2:4]:
+                dynamic_hits += 1
+                last_champion_zone = "動熱區"
+            elif champion in last_pred[4:]:
+                extra_hits += 1
+                last_champion_zone = "補碼區"
+            else:
+                last_champion_zone = "未預測組合"
 
         if champion in hot_pool:
             hot_pool_hits += 1
