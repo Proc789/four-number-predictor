@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（節奏獨立更新 + 公版UI + 自動跳格 + 關卡判定不動）
+# app-hotboost-v5-rhythm (修正：觀察期統計 + 自動跳格 + 公版UI)
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -42,7 +42,7 @@ TEMPLATE = """
   </form>
   <br>
   <a href='/observe'><button>觀察本期</button></a>
-  <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
+  <a href='/toggle'><button>{{ ' 關閉統計模式' if training else '啟動統計模式' }}</button></a>
   <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
 
   {% if prediction %}
@@ -96,14 +96,13 @@ TEMPLATE = """
 
 @app.route('/observe')
 def observe():
-    global was_observed, observation_message, history
+    global was_observed, observation_message
     was_observed = True
     observation_message = "上期為觀察期"
     if history:
-        data = history[-1]
-        process_input(data, is_observe=True)
-    stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
-    prediction = generate_prediction(stage_to_use)
+        process_input(history[-1], is_observe=True)
+    stage = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
+    prediction = generate_prediction(stage)
     predictions.append(prediction)
     return redirect('/')
 
@@ -139,8 +138,8 @@ def index():
             current = [first, second, third]
             history.append(current)
             process_input(current, is_observe=False)
-            stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
-            prediction = generate_prediction(stage_to_use)
+            stage = current_stage if 1 <= current_stage <= 4 else 1
+            prediction = generate_prediction(stage)
             predictions.append(prediction)
             was_observed = False
             observation_message = ""
@@ -182,8 +181,7 @@ def process_input(current, is_observe=False):
         if hit:
             if training_mode:
                 all_hits += 1
-            current_stage = 1
-            actual_bet_stage = 1
+            current_stage = actual_bet_stage = 1
         else:
             current_stage += 1
             actual_bet_stage += 1
@@ -206,19 +204,15 @@ def process_input(current, is_observe=False):
         else:
             last_champion_zone = "未預測組合"
 
-        if champion in hot_pool:
-            hot_pool_hits += 1
-            if champion not in last_pred:
-                last_hot_pool_hit = True
-
-    # 無論統計模式與否都更新節奏
     if champion in hot_pool:
-        rhythm_history.append(1)
-    else:
-        rhythm_history.append(0)
+        if training_mode:
+            hot_pool_hits += 1
+        if champion not in last_pred:
+            last_hot_pool_hit = True
+
+    rhythm_history.append(1 if champion in hot_pool else 0)
     if len(rhythm_history) > 5:
         rhythm_history.pop(0)
-
     recent = rhythm_history[-3:]
     total = sum(recent)
     if recent == [0, 0, 1]:
