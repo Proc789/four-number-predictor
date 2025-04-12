@@ -23,13 +23,12 @@ TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset='utf-8'>
+  <title>7碼預測器</title>
   <meta name='viewport' content='width=device-width, initial-scale=1'>
-  <title>預測器</title>
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
-  <h2>預測器</h2>
-  <div>版本：修正版（第4關 6碼 + 公版UI）</div>
+  <h2>7碼預測器</h2>
+  <div>版本：熱號2 + 動熱2 + 補碼3（第4關補碼改為2碼）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -37,12 +36,17 @@ TEMPLATE = """
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
   <br>
+  <form method='GET' action='/observe' onsubmit="syncBeforeObserve()">
+    <input type='hidden' name='first' id='first_obs'>
+    <input type='hidden' name='second' id='second_obs'>
+    <input type='hidden' name='third' id='third_obs'>
+    <button type='submit'>觀察本期</button>
+  </form>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
-  <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
+  <a href='/reset'><button>清除所有資料</button></a>
   {% if prediction %}
     <div style='margin-top: 20px;'>
-      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）<br>
-      預測碼數量：{{ prediction|length }} 碼
+      <strong>本期預測號碼：</strong> {{ prediction }}（目前第 {{ stage }} 關）
     </div>
   {% endif %}
   {% if last_prediction %}
@@ -52,21 +56,23 @@ TEMPLATE = """
   {% endif %}
   {% if last_champion_zone %}<div>冠軍號碼開在：{{ last_champion_zone }}</div>{% endif %}
   {% if observation_message %}<div style='color: gray;'>{{ observation_message }}</div>{% endif %}
-  <div>熱號節奏狀態：{{ rhythm_state }}</div>
+  <div>熱號池節奏狀態：{{ rhythm_state }}</div>
   {% if training %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>命中統計：</strong><br>
       冠軍命中次數（任一區）：{{ all_hits }} / {{ total_tests }}<br>
-      熱號命中次數：{{ hot_hits }}<br>
-      動熱命中次數：{{ dynamic_hits }}<br>
-      補碼命中次數：{{ extra_hits }}<br>
+      熱號命中次數：{{ hot_hits }} / {{ total_tests }}<br>
+      動熱命中次數：{{ dynamic_hits }} / {{ total_tests }}<br>
+      補碼命中次數：{{ extra_hits }} / {{ total_tests }}<br>
     </div>
   {% endif %}
   {% if history %}
     <div style='margin-top: 20px; text-align: left;'>
       <strong>最近輸入紀錄：</strong>
       <ul>
-        {% for row in history[-10:] %}<li>{{ row }}</li>{% endfor %}
+        {% for row in history[-10:] %}
+          <li>第 {{ loop.index }} 期：{{ row }}</li>
+        {% endfor %}
       </ul>
     </div>
   {% endif %}
@@ -78,7 +84,15 @@ TEMPLATE = """
         if (!isNaN(val) && val >= 1 && val <= 10) {
           document.getElementById(nextId).focus();
         }
+        document.getElementById('first_obs').value = document.getElementById('first').value;
+        document.getElementById('second_obs').value = document.getElementById('second').value;
+        document.getElementById('third_obs').value = document.getElementById('third').value;
       }, 100);
+    }
+    function syncBeforeObserve() {
+      document.getElementById('first_obs').value = document.getElementById('first').value;
+      document.getElementById('second_obs').value = document.getElementById('second').value;
+      document.getElementById('third_obs').value = document.getElementById('third').value;
     }
   </script>
 </body>
@@ -96,21 +110,16 @@ def observe():
         third = int(request.args.get('third', '10'))
         current = [first, second, third]
         history.append(current)
-
         if len(history) >= 5:
-            stage_to_use = current_stage if 1 <= current_stage <= 4 else 4
-            prediction = make_prediction(stage_to_use)
+            prediction = make_prediction(current_stage)
             predictions.append(prediction)
-
             champion = current[0]
             hot_pool = sources[-1]['hot'] + sources[-1]['dynamic'] if sources else []
-
             rhythm_history.append(1 if champion in hot_pool else 0)
             if len(rhythm_history) > 5:
                 rhythm_history.pop(0)
             recent = rhythm_history[-3:]
             total = sum(recent)
-            global rhythm_state
             if recent == [0, 0, 1]:
                 rhythm_state = "預熱期"
             elif total >= 2:
@@ -142,8 +151,7 @@ def index():
             history.append(current)
 
             if len(history) >= 5 or training_enabled:
-                stage_to_use = current_stage if 1 <= current_stage <= 4 else 4
-                prediction = make_prediction(stage_to_use)
+                prediction = make_prediction(current_stage)
                 predictions.append(prediction)
 
                 if len(predictions) >= 2:
@@ -152,8 +160,7 @@ def index():
                         all_hits += 1
                         current_stage = 1
                     else:
-                        if not was_observed:
-                            current_stage = min(current_stage + 1, 4)
+                        current_stage += 1
 
                     if training_enabled:
                         total_tests += 1
@@ -212,11 +219,10 @@ def toggle():
 
 @app.route('/reset')
 def reset():
-    global history, predictions, sources, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, rhythm_history
+    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, sources
     history.clear()
     predictions.clear()
     sources.clear()
-    rhythm_history.clear()
     hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
     current_stage = 1
     return redirect('/')
@@ -227,6 +233,7 @@ def make_prediction(stage):
     freq = Counter(flat)
 
     hot = [n for n, _ in freq.most_common(3)][:2]
+
     dynamic_pool = [n for n in freq if n not in hot]
     dynamic_sorted = sorted(dynamic_pool, key=lambda x: (-freq[x], -flat[::-1].index(x)))
     dynamic = dynamic_sorted[:2]
