@@ -1,4 +1,4 @@
-# app-hotboost-v5-rhythm（觀察期納入統計 + 公版UI + 自動跳格 + 即時更新 history）
+# app-hotboost-v5-rhythm（觀察期納入統計 + 公版UI + 自動跳格 + 修正節奏判定）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -181,11 +181,32 @@ def index():
         rhythm_state=rhythm_state,
         observation_message=observation_message)
 
+def update_rhythm(champion):
+    global rhythm_state, rhythm_history
+    if not hot_pool or len(history) < 3:
+        rhythm_state = "資料不足"
+        return
+    rhythm_history.append(1 if champion in hot_pool else 0)
+    if len(rhythm_history) > 5:
+        rhythm_history.pop(0)
+    recent = rhythm_history[-3:]
+    if len(recent) < 3:
+        rhythm_state = "資料不足"
+        return
+    total = sum(recent)
+    if recent == [0, 0, 1]:
+        rhythm_state = "預熱期"
+    elif total >= 2:
+        rhythm_state = "穩定期"
+    elif total == 0:
+        rhythm_state = "失準期"
+    else:
+        rhythm_state = "搖擺期"
+
 def process_input(current, is_observe=False):
     global current_stage, actual_bet_stage
     global hot_hits, dynamic_hits, extra_hits, all_hits, total_tests
-    global last_hot_pool_hit, last_champion_zone, rhythm_history, rhythm_state
-    global hot_pool, predictions
+    global last_hot_pool_hit, last_champion_zone, hot_pool, predictions
 
     if len(predictions) < 1:
         return
@@ -227,19 +248,7 @@ def process_input(current, is_observe=False):
             if champion not in last_pred:
                 last_hot_pool_hit = True
 
-        rhythm_history.append(1 if champion in hot_pool else 0)
-        if len(rhythm_history) > 5:
-            rhythm_history.pop(0)
-        recent = rhythm_history[-3:]
-        total = sum(recent)
-        if recent == [0, 0, 1]:
-            rhythm_state = "預熱期"
-        elif total >= 2:
-            rhythm_state = "穩定期"
-        elif total == 0:
-            rhythm_state = "失準期"
-        else:
-            rhythm_state = "搖擺期"
+        update_rhythm(champion)
 
 def generate_prediction(stage):
     recent = history[-3:]
