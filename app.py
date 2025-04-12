@@ -1,4 +1,3 @@
-# app-hotboost-v5-rhythm（觀察期納入統計 + 公版UI + 自動跳格 + 修正節奏判定）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -33,7 +32,7 @@ TEMPLATE = """
 </head>
 <body style='max-width: 400px; margin: auto; padding-top: 40px; font-family: sans-serif; text-align: center;'>
   <h2>預測器 - 追關版</h2>
-  <div>版本：app-hotboost-v5-rhythm（觀察統計修正 + 公版UI + 自動跳格）</div>
+  <div>版本：app-hotboost-v5-rhythm（修正版：節奏 + 公版UI + 自動跳格）</div>
   <form method='POST'>
     <input name='first' id='first' placeholder='冠軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'second')" inputmode="numeric"><br><br>
     <input name='second' id='second' placeholder='亞軍' required style='width: 80%; padding: 8px;' oninput="moveToNext(this, 'third')" inputmode="numeric"><br><br>
@@ -183,7 +182,7 @@ def index():
 
 def update_rhythm(champion):
     global rhythm_state, rhythm_history
-    if not hot_pool or len(history) < 3:
+    if not hot_pool or len(hot_pool) == 0:
         rhythm_state = "資料不足"
         return
     rhythm_history.append(1 if champion in hot_pool else 0)
@@ -251,33 +250,30 @@ def process_input(current, is_observe=False):
         update_rhythm(champion)
 
 def generate_prediction(stage):
-    recent = history[-3:]
+    global hot_pool
+    recent = history[-3:] if len(history) >= 3 else history
     flat = [n for group in recent for n in group]
+    if not flat:
+        hot_pool = []
+        return []
     freq = Counter(flat)
     hot = [n for n, _ in freq.most_common(4)][:2]
-
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
-
-    global hot_pool
     hot_pool = [n for n, _ in freq.most_common(4)]
-
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
-
     extra_count = 3 if stage in [1, 2, 3] else 2
     extra = pool[:extra_count]
-
     while len(hot + dynamic + extra) < (2 + 2 + extra_count):
         for n in range(1, 11):
             if n not in (hot + dynamic + extra):
                 extra.append(n)
             if len(hot + dynamic + extra) == (2 + 2 + extra_count):
                 break
-
     return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
