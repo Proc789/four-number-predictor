@@ -45,15 +45,9 @@ TEMPLATE = """
   {% if last_prediction %}
     <div><strong>上期預測號碼：</strong> {{ last_prediction }}</div>
   {% endif %}
-  {% if last_champion_zone %}
-    <div>冠軍號碼開在：{{ last_champion_zone }}</div>
-  {% endif %}
-  {% if observation_message %}
-    <div style='color: gray;'>{{ observation_message }}</div>
-  {% endif %}
   <div>熱號節奏：{{ rhythm_state }}</div>
   {% if training %}
-    <div style='text-align:left; margin-top: 20px;'>
+    <div style='text-align:left;'>
       <strong>命中統計：</strong><br>
       總命中：{{ all_hits }}/{{ total_tests }}<br>
       熱號命中：{{ hot_hits }}<br>
@@ -62,7 +56,7 @@ TEMPLATE = """
     </div>
   {% endif %}
   {% if history %}
-    <div style='text-align:left; margin-top: 20px;'>
+    <div style='text-align:left;'>
       <strong>最近輸入紀錄：</strong>
       <ul>
         {% for row in history[-10:] %}<li>{{ row }}</li>{% endfor %}
@@ -72,6 +66,41 @@ TEMPLATE = """
 </body>
 </html>
 """
+
+@app.route('/observe')
+def observe():
+    global was_observed, observation_message
+    was_observed = True
+    observation_message = "上期為觀察期"
+    try:
+        first = int(request.args.get('first', '10'))
+        second = int(request.args.get('second', '10'))
+        third = int(request.args.get('third', '10'))
+        current = [first, second, third]
+        history.append(current)
+
+        if len(history) >= 5:
+            stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
+            prediction = make_prediction(stage_to_use)
+            predictions.append(prediction)
+            champion = current[0]
+            hot_pool = sources[-1]['hot'] + sources[-1]['dynamic'] if sources else []
+            rhythm_history.append(1 if champion in hot_pool else 0)
+            if len(rhythm_history) > 5:
+                rhythm_history.pop(0)
+            recent = rhythm_history[-3:]
+            total = sum(recent)
+            if recent == [0, 0, 1]:
+                rhythm_state = "預熱期"
+            elif total >= 2:
+                rhythm_state = "穩定期"
+            elif total == 0:
+                rhythm_state = "失準期"
+            else:
+                rhythm_state = "搖擺期"
+    except:
+        pass
+    return redirect('/')
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -150,63 +179,6 @@ def index():
         last_champion_zone=last_champion_zone,
         observation_message=observation_message)
 
-@app.route('/observe')
-def observe():
-    global was_observed, observation_message
-    was_observed = True
-    observation_message = "上期為觀察期"
-    try:
-        first = int(request.args.get('first', '10'))
-        second = int(request.args.get('second', '10'))
-        third = int(request.args.get('third', '10'))
-        current = [first, second, third]
-        history.append(current)
-
-        if len(history) >= 5:
-            stage_to_use = current_stage if 1 <= current_stage <= 4 else 1
-            prediction = make_prediction(stage_to_use)
-            predictions.append(prediction)
-
-            champion = current[0]
-            hot_pool = sources[-1]['hot'] + sources[-1]['dynamic'] if sources else []
-
-            rhythm_history.append(1 if champion in hot_pool else 0)
-            if len(rhythm_history) > 5:
-                rhythm_history.pop(0)
-            recent = rhythm_history[-3:]
-            total = sum(recent)
-            if recent == [0, 0, 1]:
-                rhythm_state = "預熱期"
-            elif total >= 2:
-                rhythm_state = "穩定期"
-            elif total == 0:
-                rhythm_state = "失準期"
-            else:
-                rhythm_state = "搖擺期"
-    except:
-        pass
-    return redirect('/')
-
-@app.route('/toggle')
-def toggle():
-    global training_enabled, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, predictions
-    training_enabled = not training_enabled
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
-    current_stage = 1
-    predictions = []
-    return redirect('/')
-
-@app.route('/reset')
-def reset():
-    global history, predictions, sources, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, rhythm_history
-    history.clear()
-    predictions.clear()
-    sources.clear()
-    rhythm_history.clear()
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = 0
-    current_stage = 1
-    return redirect('/')
-
 def make_prediction(stage):
     recent = history[-3:]
     flat = [n for g in recent for n in g]
@@ -225,6 +197,3 @@ def make_prediction(stage):
 
     sources.append({'hot': hot, 'dynamic': dynamic, 'extra': extra})
     return sorted(hot + dynamic + extra)
-
-if __name__ == '__main__':
-    app.run(debug=True)
