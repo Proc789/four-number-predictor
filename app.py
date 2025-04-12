@@ -1,3 +1,4 @@
+
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -24,12 +25,15 @@ hot_pool = []
 last_error_message = ""
 
 def parse_input(val):
-    if val == '0' or val == 0:
-        return 10
     try:
-        return int(val)
+        num = int(val)
+        if num == 0:
+            return 10
+        if 1 <= num <= 10:
+            return num
+        raise ValueError
     except:
-        return 10
+        raise ValueError("輸入號碼必須是 1 到 10")
 
 TEMPLATE = """
 <!DOCTYPE html>
@@ -108,7 +112,6 @@ TEMPLATE = """
 </body>
 </html>
 """
-
 
 @app.route('/observe')
 def observe():
