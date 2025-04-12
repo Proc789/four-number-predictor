@@ -1,4 +1,3 @@
-
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -26,6 +25,8 @@ last_error_message = ""
 
 def parse_input(val):
     try:
+        if val is None or val == "":
+            raise ValueError("輸入為空")
         num = int(val)
         if num == 0:
             return 10
