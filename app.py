@@ -104,59 +104,12 @@ TEMPLATE = """
 
 @app.route('/observe')
 def observe():
-    global was_observed, observation_message
-    global rhythm_history, rhythm_state, last_champion_zone, last_hot_pool_hit
-    global hot_hits, hot_pool_hits, dynamic_hits, extra_hits, all_hits, total_tests
-
+    global was_observed, observation_message, predictions
     was_observed = True
     observation_message = "上期為觀察期"
 
-    if len(predictions) >= 1 and len(history) > 0 and len(hot_pool_history) >= 2:
-        current = history[-1]
-        champion = current[0]
-        last_pred = predictions[-1]
-        this_hot_pool = hot_pool_history[-2]
-
-        if training_mode:
-            total_tests += 1
-            if champion in last_pred[:2]:
-                hot_hits += 1
-                last_champion_zone = "熱號區"
-            elif champion in last_pred[2:4]:
-                dynamic_hits += 1
-                last_champion_zone = "動熱區"
-            elif champion in last_pred[4:]:
-                extra_hits += 1
-                last_champion_zone = "補碼區"
-            else:
-                last_champion_zone = "未預測組合"
-
-            if champion in this_hot_pool:
-                hot_pool_hits += 1
-                if champion not in last_pred:
-                    last_hot_pool_hit = True
-
-            rhythm_history.append(1 if champion in this_hot_pool else 0)
-            if len(rhythm_history) > 5:
-                rhythm_history.pop(0)
-            recent = rhythm_history[-3:]
-            total = sum(recent)
-            if recent == [0, 0, 1]:
-                rhythm_state = "預熱期"
-            elif total >= 2:
-                rhythm_state = "穩定期"
-            elif total == 0:
-                rhythm_state = "失準期"
-            else:
-                rhythm_state = "搖擺期"
-
-    try:
-        first = int(request.args.get('first'))
-        second = int(request.args.get('second'))
-        third = int(request.args.get('third'))
-        history.append([first, second, third])
-    except:
-        pass
+    if len(history) > 0:
+        history.append(history[-1])  # 將上一筆當作觀察資料納入 history
 
     stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
     prediction = generate_prediction(stage_to_use)
@@ -281,7 +234,6 @@ def index():
         last_champion_zone=last_champion_zone,
         rhythm_state=rhythm_state,
         observation_message=observation_message)
-
 
 def generate_prediction(stage):
     recent = history[-3:]
