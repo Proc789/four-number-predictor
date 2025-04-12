@@ -115,6 +115,43 @@ TEMPLATE = """
 </html>
 """
 
+@app.route('/observe')
+def observe():
+    global was_observed, observation_message
+    was_observed = True
+    observation_message = "上期為觀察期"
+    try:
+        first = parse_input(request.args.get('first', ''))
+        second = parse_input(request.args.get('second', ''))
+        third = parse_input(request.args.get('third', ''))
+        current = [first, second, third]
+        history.append(current)
+        process_input(current, is_observe=True)
+    except:
+        pass
+    stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
+    prediction = generate_prediction(stage_to_use)
+    predictions.append(prediction)
+    return redirect('/')
+
+@app.route('/toggle')
+def toggle():
+    global training_mode, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, predictions, hot_pool_hits
+    training_mode = not training_mode
+    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
+    current_stage = actual_bet_stage = 1
+    predictions = []
+    return redirect('/')
+
+@app.route('/reset')
+def reset():
+    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, hot_pool_hits
+    history.clear()
+    predictions.clear()
+    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
+    current_stage = actual_bet_stage = 1
+    return redirect('/')
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     global was_observed, observation_message, last_error_message
@@ -157,43 +194,6 @@ def index():
         rhythm_state=rhythm_state,
         observation_message=observation_message,
         error_message=last_error_message)
-
-@app.route('/observe')
-def observe():
-    global was_observed, observation_message
-    was_observed = True
-    observation_message = "上期為觀察期"
-    try:
-        first = parse_input(request.args.get('first', ''))
-        second = parse_input(request.args.get('second', ''))
-        third = parse_input(request.args.get('third', ''))
-        current = [first, second, third]
-        history.append(current)
-        process_input(current, is_observe=True)
-    except:
-        pass
-    stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
-    prediction = generate_prediction(stage_to_use)
-    predictions.append(prediction)
-    return redirect('/')
-
-@app.route('/toggle')
-def toggle():
-    global training_mode, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, predictions, hot_pool_hits
-    training_mode = not training_mode
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
-    current_stage = actual_bet_stage = 1
-    predictions = []
-    return redirect('/')
-
-@app.route('/reset')
-def reset():
-    global history, predictions, hot_hits, dynamic_hits, extra_hits, all_hits, total_tests, current_stage, actual_bet_stage, hot_pool_hits
-    history.clear()
-    predictions.clear()
-    hot_hits = dynamic_hits = extra_hits = all_hits = total_tests = hot_pool_hits = 0
-    current_stage = actual_bet_stage = 1
-    return redirect('/')
 
 def process_input(current, is_observe=False):
     global current_stage, actual_bet_stage
