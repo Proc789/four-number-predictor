@@ -1,3 +1,4 @@
+# app-hotboost-v5-rhythm（節奏獨立更新 + 公版UI + 自動跳格 + 關卡判定不動）
 from flask import Flask, render_template_string, request, redirect
 import random
 from collections import Counter
@@ -40,12 +41,7 @@ TEMPLATE = """
     <button type='submit' style='padding: 10px 20px;'>提交</button>
   </form>
   <br>
-  <form method='POST' action='/observe'>
-    <input type='hidden' name='first' id='obs_first'>
-    <input type='hidden' name='second' id='obs_second'>
-    <input type='hidden' name='third' id='obs_third'>
-    <button type='submit'>觀察本期</button>
-  </form>
+  <a href='/observe'><button>觀察本期</button></a>
   <a href='/toggle'><button>{{ '關閉統計模式' if training else '啟動統計模式' }}</button></a>
   <a href='/reset'><button style='margin-left: 10px;'>清除所有資料</button></a>
 
@@ -93,30 +89,19 @@ TEMPLATE = """
         }
       }, 100);
     }
-    document.addEventListener('input', () => {
-      document.getElementById('obs_first').value = document.getElementById('first').value;
-      document.getElementById('obs_second').value = document.getElementById('second').value;
-      document.getElementById('obs_third').value = document.getElementById('third').value;
-    });
   </script>
 </body>
 </html>
 """
 
-@app.route('/observe', methods=['POST'])
+@app.route('/observe')
 def observe():
-    global was_observed, observation_message
+    global was_observed, observation_message, history
     was_observed = True
     observation_message = "上期為觀察期"
-    try:
-        first = int(request.form['first']) or 10
-        second = int(request.form['second']) or 10
-        third = int(request.form['third']) or 10
-        current = [first, second, third]
-        history.append(current)
-        process_input(current, is_observe=True)
-    except:
-        pass
+    if history:
+        data = history[-1]
+        process_input(data, is_observe=True)
     stage_to_use = actual_bet_stage if 1 <= actual_bet_stage <= 4 else 1
     prediction = generate_prediction(stage_to_use)
     predictions.append(prediction)
@@ -180,32 +165,11 @@ def index():
         rhythm_state=rhythm_state,
         observation_message=observation_message)
 
-def update_rhythm(champion):
-    global rhythm_state, rhythm_history
-    if not hot_pool or len(hot_pool) == 0:
-        rhythm_state = "資料不足"
-        return
-    rhythm_history.append(1 if champion in hot_pool else 0)
-    if len(rhythm_history) > 5:
-        rhythm_history.pop(0)
-    recent = rhythm_history[-3:]
-    if len(recent) < 3:
-        rhythm_state = "資料不足"
-        return
-    total = sum(recent)
-    if recent == [0, 0, 1]:
-        rhythm_state = "預熱期"
-    elif total >= 2:
-        rhythm_state = "穩定期"
-    elif total == 0:
-        rhythm_state = "失準期"
-    else:
-        rhythm_state = "搖擺期"
-
 def process_input(current, is_observe=False):
     global current_stage, actual_bet_stage
     global hot_hits, dynamic_hits, extra_hits, all_hits, total_tests
-    global last_hot_pool_hit, last_champion_zone, hot_pool, predictions
+    global last_hot_pool_hit, last_champion_zone, rhythm_history, rhythm_state
+    global hot_pool, predictions
 
     if len(predictions) < 1:
         return
@@ -247,33 +211,53 @@ def process_input(current, is_observe=False):
             if champion not in last_pred:
                 last_hot_pool_hit = True
 
-        update_rhythm(champion)
+    # 無論統計模式與否都更新節奏
+    if champion in hot_pool:
+        rhythm_history.append(1)
+    else:
+        rhythm_history.append(0)
+    if len(rhythm_history) > 5:
+        rhythm_history.pop(0)
+
+    recent = rhythm_history[-3:]
+    total = sum(recent)
+    if recent == [0, 0, 1]:
+        rhythm_state = "預熱期"
+    elif total >= 2:
+        rhythm_state = "穩定期"
+    elif total == 0:
+        rhythm_state = "失準期"
+    else:
+        rhythm_state = "搖擺期"
 
 def generate_prediction(stage):
-    global hot_pool
-    recent = history[-3:] if len(history) >= 3 else history
+    recent = history[-3:]
     flat = [n for group in recent for n in group]
-    if not flat:
-        hot_pool = []
-        return []
     freq = Counter(flat)
     hot = [n for n, _ in freq.most_common(4)][:2]
+
     flat_dynamic = [n for n in flat if n not in hot]
     freq_dyn = Counter(flat_dynamic)
     dynamic_pool = sorted(freq_dyn.items(), key=lambda x: (-x[1], -flat_dynamic[::-1].index(x[0])))
     dynamic = [n for n, _ in dynamic_pool[:2]]
+
+    global hot_pool
     hot_pool = [n for n, _ in freq.most_common(4)]
+
     used = set(hot + dynamic)
     pool = [n for n in range(1, 11) if n not in used]
     random.shuffle(pool)
+
     extra_count = 3 if stage in [1, 2, 3] else 2
     extra = pool[:extra_count]
+
     while len(hot + dynamic + extra) < (2 + 2 + extra_count):
         for n in range(1, 11):
             if n not in (hot + dynamic + extra):
                 extra.append(n)
             if len(hot + dynamic + extra) == (2 + 2 + extra_count):
                 break
+
     return sorted(hot + dynamic + extra)
 
 if __name__ == '__main__':
